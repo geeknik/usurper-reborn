@@ -121,6 +121,9 @@ namespace UsurperRemake.Systems
                 case "O":
                     await ToggleOnlinePlay();
                     break;
+                case "S":
+                    await SetOnlineServer();
+                    break;
                 case "Q":
                     return true;
             }
@@ -203,6 +206,9 @@ namespace UsurperRemake.Systems
                 case "O":
                     await ToggleOnlinePlay();
                     break;
+                case "S":
+                    await SetOnlineServer();
+                    break;
                 case "Q":
                     return true;
             }
@@ -265,7 +271,11 @@ namespace UsurperRemake.Systems
             terminal.SetColor("bright_yellow"); terminal.Write("O");
             terminal.SetColor("darkgray"); terminal.Write("]");
             terminal.SetColor(GameConfig.DisableOnlinePlay ? "red" : "bright_green");
-            terminal.WriteLine(GameConfig.DisableOnlinePlay ? "Online:OFF" : "Online:ON");
+            terminal.Write(GameConfig.DisableOnlinePlay ? "Online:OFF " : "Online:ON ");
+            terminal.SetColor("darkgray"); terminal.Write("[");
+            terminal.SetColor("bright_yellow"); terminal.Write("S");
+            terminal.SetColor("darkgray"); terminal.Write("]");
+            terminal.SetColor("white"); terminal.WriteLine($"Server:{GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort}");
             terminal.SetColor("bright_cyan");
             terminal.WriteLine(" Monitoring:");
             SysOpMenuRow(("6", "Stats"), ("7", "DebugLog"), ("8", "NPCs"));
@@ -315,7 +325,11 @@ namespace UsurperRemake.Systems
             terminal.SetColor("bright_yellow"); terminal.Write("O");
             terminal.SetColor("darkgray"); terminal.Write("]");
             terminal.SetColor(GameConfig.DisableOnlinePlay ? "red" : "bright_green");
-            terminal.WriteLine(GameConfig.DisableOnlinePlay ? "Online:OFF" : "Online:ON");
+            terminal.Write(GameConfig.DisableOnlinePlay ? "Online:OFF " : "Online:ON ");
+            terminal.SetColor("darkgray"); terminal.Write("[");
+            terminal.SetColor("bright_yellow"); terminal.Write("S");
+            terminal.SetColor("darkgray"); terminal.Write("]");
+            terminal.SetColor("white"); terminal.WriteLine($"Server:{GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort}");
             terminal.SetColor("bright_cyan");
             terminal.WriteLine(" Monitoring:");
             SysOpMenuRow(("7", "Online"), ("8", "Stats"), ("K", "Kick"), ("D", "DebugLog"), ("N", "NPCs"));
@@ -1359,6 +1373,56 @@ namespace UsurperRemake.Systems
             }
             DebugLogger.Instance.LogInfo("SYSOP", $"Online multiplayer {(GameConfig.DisableOnlinePlay ? "disabled" : "enabled")}");
             await terminal.GetInputAsync(" Press Enter to continue...");
+        }
+
+        private async Task SetOnlineServer()
+        {
+            terminal.ClearScreen();
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("═══ ONLINE SERVER SETTINGS ═══");
+            terminal.WriteLine("");
+
+            terminal.SetColor("white");
+            terminal.WriteLine($"Current server: {GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort}");
+            terminal.WriteLine("");
+
+            terminal.SetColor("gray");
+            terminal.WriteLine("Set the server address and port for the [O]nline Play connection.");
+            terminal.WriteLine("Players on your BBS will connect to this server when they choose Online Play.");
+            terminal.WriteLine("");
+
+            terminal.SetColor("white");
+            terminal.Write($"Server address (blank to keep '{GameConfig.OnlineServerAddress}'): ");
+            var addrInput = await terminal.GetInputAsync("");
+
+            if (!string.IsNullOrWhiteSpace(addrInput))
+            {
+                GameConfig.OnlineServerAddress = addrInput.Trim();
+            }
+
+            terminal.Write($"Server port (1-65535, blank to keep {GameConfig.OnlineServerPort}): ");
+            var portInput = await terminal.GetInputAsync("");
+
+            if (!string.IsNullOrWhiteSpace(portInput))
+            {
+                if (int.TryParse(portInput, out int port) && port >= 1 && port <= 65535)
+                {
+                    GameConfig.OnlineServerPort = port;
+                }
+                else
+                {
+                    terminal.SetColor("red");
+                    terminal.WriteLine("Invalid port. Please enter a number between 1 and 65535.");
+                    await terminal.GetInputAsync("Press Enter to continue...");
+                    return;
+                }
+            }
+
+            SysOpConfigSystem.Instance.SaveConfig();
+            terminal.SetColor("green");
+            terminal.WriteLine($"Online server set to {GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort} (saved).");
+            DebugLogger.Instance.LogInfo("SYSOP", $"Online server changed to {GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort}");
+            await terminal.GetInputAsync("Press Enter to continue...");
         }
 
         private async Task SetMOTD()

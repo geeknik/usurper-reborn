@@ -85,6 +85,17 @@ public static partial class GameConfig
     public static bool DisableOnlinePlay { get; set; } = false;
 
     /// <summary>
+    /// Online server address for the [O]nline Play connection.
+    /// SysOps running their own server can change this via SysOp Console.
+    /// </summary>
+    public static string OnlineServerAddress { get; set; } = "play.usurper-reborn.net";
+
+    /// <summary>
+    /// Online server port for the [O]nline Play connection.
+    /// </summary>
+    public static int OnlineServerPort { get; set; } = 4000;
+
+    /// <summary>
     /// Default daily turns for new characters (default: 325 to match TurnsPerDay)
     /// </summary>
     public static int DefaultDailyTurns { get; set; } = 325;

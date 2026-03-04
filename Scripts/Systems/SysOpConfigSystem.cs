@@ -107,6 +107,12 @@ namespace UsurperRemake.Systems
             // Feature toggles
             GameConfig.DisableOnlinePlay = _config.DisableOnlinePlay;
 
+            // Online server
+            GameConfig.OnlineServerAddress = string.IsNullOrWhiteSpace(_config.OnlineServerAddress)
+                ? "play.usurper-reborn.net"
+                : _config.OnlineServerAddress.Trim();
+            GameConfig.OnlineServerPort = Math.Clamp(_config.OnlineServerPort, 1, 65535);
+
             // Default color theme
             if (Enum.TryParse<ColorThemeType>(_config.DefaultColorTheme, true, out var theme))
                 GameConfig.DefaultColorTheme = theme;
@@ -145,6 +151,8 @@ namespace UsurperRemake.Systems
             _config.IdleTimeoutMinutes = DoorMode.IdleTimeoutMinutes;
             _config.DefaultColorTheme = GameConfig.DefaultColorTheme.ToString();
             _config.DisableOnlinePlay = GameConfig.DisableOnlinePlay;
+            _config.OnlineServerAddress = GameConfig.OnlineServerAddress;
+            _config.OnlineServerPort = GameConfig.OnlineServerPort;
         }
 
         /// <summary>
@@ -187,6 +195,10 @@ namespace UsurperRemake.Systems
 
         // Feature toggles
         public bool DisableOnlinePlay { get; set; } = false;
+
+        // Online server
+        public string OnlineServerAddress { get; set; } = "play.usurper-reborn.net";
+        public int OnlineServerPort { get; set; } = 4000;
 
         // Metadata
         public DateTime LastModified { get; set; } = DateTime.UtcNow;

@@ -20,8 +20,6 @@ namespace UsurperRemake.Systems
     /// </summary>
     public class OnlinePlaySystem
     {
-        private const string OFFICIAL_SERVER = "play.usurper-reborn.net";
-        private const int OFFICIAL_PORT = 4000;
         private const string SSH_GATEWAY_USER = "usurper";
         private const string SSH_GATEWAY_PASS = "play";
         private const string CREDENTIALS_FILE = "online_credentials.json";
@@ -65,13 +63,16 @@ namespace UsurperRemake.Systems
             terminal.SetColor("gray");
             terminal.WriteLine("  Connect to the Usurper Reborn online server.");
             terminal.WriteLine("  Your online character is stored on the server - separate from local saves.");
-            terminal.WriteLine("  You will login or create an account after connecting.");
+            if (UsurperRemake.BBS.DoorMode.IsInDoorMode)
+                terminal.WriteLine("  You will be logged in automatically using your BBS username.");
+            else
+                terminal.WriteLine("  You will login or create an account after connecting.");
             terminal.WriteLine("");
 
             terminal.SetColor("bright_white");
             terminal.Write("  Server: ");
             terminal.SetColor("bright_green");
-            terminal.WriteLine($"{OFFICIAL_SERVER}:{OFFICIAL_PORT}");
+            terminal.WriteLine($"{GameConfig.OnlineServerAddress}:{GameConfig.OnlineServerPort}");
             terminal.WriteLine("");
 
             terminal.SetColor("darkgray");
@@ -99,7 +100,7 @@ namespace UsurperRemake.Systems
             if (menuChoice.Trim().ToUpper() != "C")
                 return;
 
-            await ConnectAndPlay(OFFICIAL_SERVER, OFFICIAL_PORT);
+            await ConnectAndPlay(GameConfig.OnlineServerAddress, GameConfig.OnlineServerPort);
         }
 
         /// <summary>
@@ -301,51 +302,105 @@ namespace UsurperRemake.Systems
 
         /// <summary>
         /// Connect to the MUD server, authenticate, and pipe I/O.
-        /// BBS mode uses direct TCP; Local/Steam uses SSH tunnel.
+        /// BBS door mode uses direct TCP with trusted AUTH passthrough.
+        /// Local/Steam uses SSH tunnel with interactive login.
         /// </summary>
         private async Task ConnectAndPlay(string server, int port)
         {
-            // Detect telnet BBS: socket mode (raw handle) means the BBS user connected via telnet.
-            // In that case, use direct TCP to MUD server on port 4001 — SSH relay output goes
-            // through SocketTerminal which strips ANSI colors, but raw TCP bytes are clean.
-            // SSH BBS (stdio mode) and Local/Steam use SSH tunnel on port 4000.
-            bool isTelnetBBS = UsurperRemake.BBS.DoorMode.IsInDoorMode
-                && UsurperRemake.BBS.BBSTerminalAdapter.Instance?.GetRawOutputStream() != null;
-            useTcpMode = isTelnetBBS;
-
-            bool connected;
-            if (useTcpMode)
+            // BBS door mode: seamless passthrough using trusted AUTH (no password).
+            // The BBS has already authenticated the user, so we send AUTH:username:BBS
+            // and let --auto-provision on the server create the account if needed.
+            if (UsurperRemake.BBS.DoorMode.IsInDoorMode)
             {
-                // Direct TCP to MUD server on port 4001 (bypasses sslh on 4000)
-                connected = await EstablishTcpConnection(server, 4001);
-            }
-            else
-            {
-                connected = EstablishSSHConnection(server, port);
+                useTcpMode = true;
+                bool connected = await EstablishTcpConnection(server, port);
+                if (!connected)
+                {
+                    await terminal.PressAnyKey();
+                    return;
+                }
+
+                // Send trusted AUTH header with BBS username from drop file
+                string bbsUsername = UsurperRemake.BBS.DoorMode.GetPlayerName() ?? "unknown";
+                string authHeader = $"AUTH:{bbsUsername}:BBS\n";
+                terminal.SetColor("gray");
+                terminal.WriteLine($"  Authenticating as {bbsUsername}...");
+
+                try
+                {
+                    WriteToServer(authHeader);
+                }
+                catch
+                {
+                    terminal.SetColor("bright_red");
+                    terminal.WriteLine("  Lost connection to server.");
+                    await terminal.PressAnyKey();
+                    Disconnect();
+                    return;
+                }
+
+                var authResponse = await ReadAuthResponse();
+                if (authResponse == null || !authResponse.Contains("OK"))
+                {
+                    terminal.SetColor("bright_red");
+                    if (authResponse != null && authResponse.Contains("ERR:"))
+                    {
+                        var errStart = authResponse.IndexOf("ERR:") + 4;
+                        var errEnd = authResponse.IndexOf('\n', errStart);
+                        var errText = errEnd > errStart
+                            ? authResponse.Substring(errStart, errEnd - errStart).Trim()
+                            : authResponse.Substring(errStart).Trim();
+                        terminal.WriteLine($"  Auth failed: {errText}");
+                    }
+                    else
+                    {
+                        terminal.WriteLine("  Auth failed: no response from server.");
+                    }
+                    terminal.SetColor("gray");
+                    terminal.WriteLine("  The server may need --auto-provision enabled for BBS passthrough.");
+                    await terminal.PressAnyKey();
+                    Disconnect();
+                    return;
+                }
+
+                terminal.SetColor("bright_green");
+                terminal.WriteLine("  Authenticated!");
+                terminal.WriteLine("  Starting game session...");
+                terminal.WriteLine("");
+
+                cancellationSource = new CancellationTokenSource();
+                try
+                {
+                    await PipeIO(cancellationSource.Token);
+                }
+                finally
+                {
+                    Disconnect();
+                }
+                return;
             }
 
-            if (!connected)
+            // Non-BBS mode (Local/Steam): SSH tunnel with interactive login
+            useTcpMode = false;
+
+            bool sshConnected = EstablishSSHConnection(server, port);
+
+            if (!sshConnected)
             {
                 await terminal.PressAnyKey();
                 return;
             }
 
-            if (!useTcpMode)
-            {
-                // SSH mode: drain relay banner before sending AUTH
-                await Task.Delay(500);
-                DrainShellStream();
-            }
+            // SSH mode: drain relay banner before sending AUTH
+            await Task.Delay(500);
+            DrainShellStream();
 
             // Auth loop — prompt for Login/Register until success or user quits
             bool authenticated = false;
             int attempts = 0;
             const int MAX_ATTEMPTS = 5;
 
-            // Check for saved credentials (skip in BBS door mode — multiple BBS users
-            // share the same game installation, so saved credentials would log everyone
-            // in as the first user who saved them)
-            var savedCreds = UsurperRemake.BBS.DoorMode.IsInDoorMode ? null : LoadSavedCredentials();
+            var savedCreds = LoadSavedCredentials();
 
             while (!authenticated && attempts < MAX_ATTEMPTS)
             {
@@ -1315,8 +1370,8 @@ namespace UsurperRemake.Systems
         /// </summary>
         private class OnlineCredentials
         {
-            public string Server { get; set; } = OFFICIAL_SERVER;
-            public int Port { get; set; } = OFFICIAL_PORT;
+            public string Server { get; set; } = GameConfig.OnlineServerAddress;
+            public int Port { get; set; } = GameConfig.OnlineServerPort;
             public string Username { get; set; } = "";
             public string Password
             {
