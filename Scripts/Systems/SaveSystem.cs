@@ -767,6 +767,11 @@ namespace UsurperRemake.Systems
                 HasShatteredSealFragment = player.HasShatteredSealFragment,
                 HasTouchedTheVoid = player.HasTouchedTheVoid,
 
+                // NPC Settlement buffs (v0.49.5)
+                SettlementBuffType = player.SettlementBuffType,
+                SettlementBuffCombats = player.SettlementBuffCombats,
+                SettlementBuffValue = player.SettlementBuffValue,
+
                 // Faction consumable properties (v0.40.2)
                 PoisonCoatingCombats = player.PoisonCoatingCombats,
                 ActivePoisonType = (int)player.ActivePoisonType,
@@ -1169,7 +1174,10 @@ namespace UsurperRemake.Systems
                 GodStates = SerializeGodStates(),
 
                 // Marketplace listings
-                MarketplaceListings = MarketplaceSystem.Instance.ToSaveData()
+                MarketplaceListings = MarketplaceSystem.Instance.ToSaveData(),
+
+                // NPC Settlement state (v0.49.5)
+                Settlement = UsurperRemake.Systems.SettlementSystem.Instance?.ToSaveData()
             };
         }
         

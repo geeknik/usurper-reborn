@@ -276,6 +276,54 @@ namespace UsurperRemake.Systems
         }
 
         /// <summary>
+        /// Determine faction for an NPC based on its actual properties (class, alignment, personality).
+        /// Used for immigrant NPCs and children-turned-adults that don't have NPCTemplates.
+        /// </summary>
+        public Faction? DetermineFactionForNPC(NPC npc)
+        {
+            string alignment = npc.Chivalry > npc.Darkness ? "good" : (npc.Darkness > npc.Chivalry ? "evil" : "neutral");
+
+            // Clerics → Faith (unless evil)
+            if (npc.Class == CharacterClass.Cleric && alignment != "evil")
+                return Faction.TheFaith;
+
+            // Assassins → Shadows (80%)
+            if (npc.Class == CharacterClass.Assassin && random.Next(100) < 80)
+                return Faction.TheShadows;
+
+            // Good Paladins → Crown or Faith
+            if (npc.Class == CharacterClass.Paladin && alignment == "good")
+                return random.Next(2) == 0 ? Faction.TheCrown : Faction.TheFaith;
+
+            // Personality-float heuristics (immigrants/children use float traits, not string keywords)
+            var p = npc.Personality;
+            if (p != null)
+            {
+                // High tenderness + low aggression → Faith
+                if (p.Tenderness > 0.6f && p.Aggression < 0.4f)
+                    return Faction.TheFaith;
+                // High aggression + low greed + good alignment → Crown
+                if (p.Aggression > 0.5f && p.Greed < 0.4f && alignment == "good")
+                    return Faction.TheCrown;
+                // High greed or high aggression + evil → Shadows
+                if ((p.Greed > 0.6f || (p.Aggression > 0.6f && alignment == "evil")))
+                    return Faction.TheShadows;
+            }
+
+            // Evil → Shadows (40%)
+            if (alignment == "evil" && random.Next(100) < 40)
+                return Faction.TheShadows;
+
+            // Good warriors/barbarians → Crown (30%)
+            if (alignment == "good" &&
+                (npc.Class == CharacterClass.Warrior || npc.Class == CharacterClass.Barbarian) &&
+                random.Next(100) < 30)
+                return Faction.TheCrown;
+
+            return null;
+        }
+
+        /// <summary>
         /// Generate stats for NPC based on level and class
         /// </summary>
         private void GenerateNPCStats(NPC npc, NPCTemplate template)
@@ -1019,6 +1067,9 @@ namespace UsurperRemake.Systems
                 personality.Gender = sex == CharacterSex.Female ? GenderIdentity.Female : GenderIdentity.Male;
                 npc.Personality = personality;
                 npc.Brain = new NPCBrain(npc, personality);
+
+                // Assign faction based on class, alignment, and personality
+                npc.NPCFaction = DetermineFactionForNPC(npc);
 
                 return npc;
             }

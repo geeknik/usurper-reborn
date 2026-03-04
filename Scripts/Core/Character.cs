@@ -277,6 +277,12 @@ public class Character
     public bool IsMercenary { get; set; } = false;
     public string MercenaryName { get; set; } = ""; // For syncing death back to RoyalMercenaries list
 
+    // Whether this class uses Mana (spellcasters) vs Stamina (ability users)
+    public bool IsManaClass => Class == CharacterClass.Cleric || Class == CharacterClass.Magician ||
+        Class == CharacterClass.Sage || Class == CharacterClass.Tidesworn ||
+        Class == CharacterClass.Wavecaller || Class == CharacterClass.Cyclebreaker ||
+        Class == CharacterClass.Abysswarden || Class == CharacterClass.Voidreaver;
+
     // Combat Stamina System - resource for special abilities
     // Formula: MaxCombatStamina = 50 + (Stamina stat * 2) + (Level * 3) + armor weight bonus
     public long CurrentCombatStamina { get; set; } = 100;
@@ -545,6 +551,12 @@ public class Character
     // Dungeon settlements (v0.49.4)
     public HashSet<string> VisitedSettlements { get; set; } = new();
     public HashSet<string> SettlementLoreRead { get; set; } = new();
+
+    // NPC Settlement buffs (v0.49.5) — The Outskirts
+    public int SettlementBuffType { get; set; }       // 0=None, 1=XPBonus, 2=DefenseBonus
+    public int SettlementBuffCombats { get; set; }    // Remaining combats
+    public float SettlementBuffValue { get; set; }    // Buff multiplier
+    public bool HasSettlementBuff => SettlementBuffType > 0 && SettlementBuffCombats > 0;
 
     // Wilderness exploration (v0.49.4)
     public int WildernessExplorationsToday { get; set; } = 0;
@@ -924,8 +936,15 @@ public class Character
         // Constitution bonus to HP
         MaxHP += StatEffectsSystem.GetConstitutionHPBonus(Constitution, Level);
 
+        // Non-mana classes have no mana (handles migration for old Paladin/Bard/Alchemist saves)
+        if (!IsManaClass)
+        {
+            MaxMana = 0;
+            savedMana = 0;
+        }
+
         // Intelligence and Wisdom bonus to Mana (for casters)
-        if (BaseMaxMana > 0) // Only for classes with mana
+        if (MaxMana > 0)
         {
             MaxMana += StatEffectsSystem.GetIntelligenceManaBonus(Intelligence, Level);
             MaxMana += StatEffectsSystem.GetWisdomManaBonus(Wisdom);

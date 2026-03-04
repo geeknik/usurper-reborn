@@ -8733,6 +8733,14 @@ public class DungeonLocation : BaseLocation
     private async Task RemoveTeammateFromParty()
     {
         terminal.WriteLine("");
+        // Show who can be removed
+        terminal.SetColor("cyan");
+        for (int i = 0; i < teammates.Count; i++)
+        {
+            var tm = teammates[i];
+            string tag = tm.IsGroupedPlayer ? " [Player]" : "";
+            terminal.WriteLine($"  {i + 2}. {tm.DisplayName}{tag} - Level {tm.Level} {tm.Class}");
+        }
         terminal.SetColor("white");
         // Party list shows player as #1, so teammates are #2 onwards
         // Ask for 2-N to match the displayed party numbers
@@ -11037,6 +11045,9 @@ public class DungeonLocation : BaseLocation
 
             // Take damage on failure
             int damage = riddle.FailureDamage * currentDungeonLevel / 5;
+            // Settlement Prison trap resistance
+            if (player.HasSettlementBuff && player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.TrapResist)
+                damage = (int)(damage * (1f - player.SettlementBuffValue));
             if (damage > 0)
             {
                 player.HP = Math.Max(1, player.HP - damage);
@@ -11141,6 +11152,9 @@ public class DungeonLocation : BaseLocation
             terminal.WriteLine("The puzzle resets. You failed to solve it.");
 
             int damage = (int)(player.MaxHP * (puzzle.FailureDamagePercent / 100.0));
+            // Settlement Prison trap resistance
+            if (player.HasSettlementBuff && player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.TrapResist)
+                damage = (int)(damage * (1f - player.SettlementBuffValue));
             if (damage > 0)
             {
                 player.HP = Math.Max(1, player.HP - damage);

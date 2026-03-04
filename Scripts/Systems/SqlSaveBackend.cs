@@ -1177,6 +1177,67 @@ namespace UsurperRemake.Systems
             }
         }
 
+        /// <summary>Prune combat_events older than the specified number of days, keeping at most maxRows.</summary>
+        public async Task PruneCombatEvents(int daysToKeep = 7, int maxRows = 1000)
+        {
+            try
+            {
+                using var conn = new SqliteConnection(connectionString);
+                await conn.OpenAsync();
+
+                // Delete old events by age
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = $"DELETE FROM combat_events WHERE created_at < datetime('now', '-{daysToKeep} days');";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Cap total rows (keep newest)
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+                        DELETE FROM combat_events WHERE id NOT IN (
+                            SELECT id FROM combat_events ORDER BY created_at DESC LIMIT @maxRows
+                        );";
+                    cmd.Parameters.AddWithValue("@maxRows", maxRows);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Instance.LogError("SQL", $"Failed to prune combat events: {ex.Message}");
+            }
+        }
+
+        /// <summary>Remove orphaned rows from tables that reference deleted players.</summary>
+        public async Task PruneOrphanedPlayerData()
+        {
+            try
+            {
+                using var conn = new SqliteConnection(connectionString);
+                await conn.OpenAsync();
+
+                // sleeping_players, online_players, combat_events keyed on username/player_name
+                string[] orphanQueries = new[]
+                {
+                    "DELETE FROM sleeping_players WHERE username NOT IN (SELECT username FROM players)",
+                    "DELETE FROM online_players WHERE username NOT IN (SELECT username FROM players)",
+                    "DELETE FROM combat_events WHERE player_name NOT IN (SELECT username FROM players) AND player_name NOT IN (SELECT display_name FROM players)",
+                };
+
+                foreach (var sql in orphanQueries)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = sql;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Instance.LogError("SQL", $"Failed to prune orphaned player data: {ex.Message}");
+            }
+        }
+
         public async Task<List<NewsEntry>> GetRecentNews(int count = 20)
         {
             var entries = new List<NewsEntry>();

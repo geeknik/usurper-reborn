@@ -569,15 +569,22 @@ namespace UsurperRemake.Systems
             var (npcKey, npcData) = available[idx];
             _notifiedNPCs.Add(npcKey);
 
+            string friendlyLocation = npcData.Location switch
+            {
+                "WeaponShop" => "Weapon Shop",
+                "MainStreet" => "Main Street",
+                _ => npcData.Location
+            };
+
             return npcData.Name switch
             {
-                "Marcus" => $"Word around town: Marcus at the Healer has been asking about you.",
-                "Elena" => $"The innkeeper mentions that Elena at the Temple seems troubled lately.",
-                "Bartholomew" => $"Old Bartholomew at the Inn has a tale he's been dying to tell.",
-                "Greta" => $"Greta the adventurer has been spotted pacing near the Healer's.",
-                "Pip" => $"That scruffy kid Pip was seen lurking around the Auction House.",
-                "Ezra" => $"The dying prophet Ezra whispers your name to anyone who'll listen.",
-                _ => $"{npcData.Name} at the {npcData.Location} has something to tell you."
+                "Marcus" => $"Word around town: Marcus at the {friendlyLocation} has been asking about you.",
+                "Elena" => $"The innkeeper mentions that Elena at the {friendlyLocation} seems troubled lately.",
+                "Bartholomew" => $"Old Bartholomew at the {friendlyLocation} has a tale he's been dying to tell.",
+                "Greta" => $"Greta the adventurer has been spotted pacing near the {friendlyLocation}.",
+                "Pip" => $"That scruffy kid Pip was seen lurking around {friendlyLocation}.",
+                "Ezra" => $"The dying prophet Ezra whispers your name from the {friendlyLocation}.",
+                _ => $"{npcData.Name} at the {friendlyLocation} has something to tell you."
             };
         }
 

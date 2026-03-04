@@ -9,7 +9,7 @@ using System.Collections.Generic;
 public static partial class GameConfig
 {
     // Version information
-    public const string Version = "0.49.4";
+    public const string Version = "0.49.5";
     public const string VersionName = "Swords and Lutes";
     public const string DiscordInvite = "discord.gg/EZhwgDT6Ta";
 
@@ -752,6 +752,28 @@ public static partial class GameConfig
     public const int EvilDeedDarkMinDarkness = 400;
     public const int DarkPactDuration = 10;            // combats
     public const float DarkPactDamageBonus = 0.15f;    // 15% damage boost
+
+    // NPC Settlement — The Outskirts (v0.49.5)
+    public const int SettlementMinNPCs = 5;                      // Min settlers before visible to player
+    public const int SettlementMaxNPCs = 15;                     // Cap on settler count
+    public const double SettlementMigrateChance = 0.02;          // 2% chance per tick for NPC to migrate
+    public const double SettlementContributeRate = 0.01;         // 1% of NPC gold contributed per tick
+    public const int SettlementBuffDuration = 5;                 // Settlement buffs last 5 combats
+    public const float SettlementXPBonus = 0.10f;                // Tavern: +10% XP
+    public const float SettlementDefenseBonus = 0.05f;           // Palisade: +5% defense
+    public const float SettlementHealPercent = 0.30f;            // Shrine: 30% MaxHP heal
+    public static readonly long[] SettlementBuildingCosts = { 0, 5_000, 25_000, 100_000 }; // None/Foundation/Built/Upgraded
+    // NPC Building Proposals
+    public const int SettlementProposalDeliberationTicks = 5;    // Ticks settlers vote before resolution
+    public const int SettlementProposalCooldownTicks = 20;       // Ticks before failed proposal can re-appear
+    public const int SettlementMinBuildingsForProposals = 3;     // Original buildings at Foundation+ before proposals start
+    public const long SettlementEndorsementCost = 1000;          // Gold to endorse a proposal
+    public const float SettlementDamageBonus = 0.10f;            // Arena: +10% damage
+    public const float SettlementGoldBonus = 0.15f;              // Thieves' Den: +15% gold find
+    public const float SettlementManaRestorePercent = 0.30f;     // Mystic Circle: 30% MaxMP
+    public const float SettlementTrapResist = 0.50f;             // Prison: -50% trap damage
+    public const float SettlementLibraryXPBonus = 0.05f;         // Library: +5% XP (stacks w/ Tavern)
+    public const long SettlementGambleMaxBet = 5000;             // Gambling Hall: max bet
 
     // Reinforced Door (safe home sleep in online mode)
     public const long ReinforcedDoorCost = 250_000;
@@ -1935,6 +1957,9 @@ public enum GameLocation
 
     // Wilderness (exploration beyond the city gates)
     Wilderness = 504,    // Wilderness exploration
+
+    // NPC Settlement (autonomous town-building)
+    Settlement = 505,    // The Outskirts — NPC-built settlement
 
     Closed = 30000       // onloc_closed (for fake players)
 }

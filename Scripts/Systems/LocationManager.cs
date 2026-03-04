@@ -111,6 +111,9 @@ public class LocationManager
         // Wilderness (exploration beyond the city gates)
         locations[GameLocation.Wilderness] = new WildernessLocation();
 
+        // NPC Settlement (autonomous town-building)
+        locations[GameLocation.Settlement] = new SettlementLocation();
+
         // Note: Gym removed - stat training doesn't fit single-player endless format
 
         // GD.Print($"[LocationManager] Initialized {locations.Count} locations");
@@ -146,7 +149,8 @@ public class LocationManager
             GameLocation.Dormitory,    // loc17 – lodging
             GameLocation.MusicShop,    // loc18 – music shop
             GameLocation.TeamCorner,   // loc19 – team corner
-            GameLocation.Wilderness    // loc20 – wilderness exploration
+            GameLocation.Wilderness,   // loc20 – wilderness exploration
+            GameLocation.Settlement    // loc21 – NPC settlement
         };
         
         navigationTable[GameLocation.TheInn] = new List<GameLocation>
@@ -227,6 +231,11 @@ public class LocationManager
         };
 
         navigationTable[GameLocation.Wilderness] = new List<GameLocation>
+        {
+            GameLocation.MainStreet
+        };
+
+        navigationTable[GameLocation.Settlement] = new List<GameLocation>
         {
             GameLocation.MainStreet
         };

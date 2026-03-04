@@ -1734,7 +1734,7 @@ public abstract class BaseLocation
         terminal.SetColor("yellow");
         terminal.Write($"{currentPlayer.Gold:N0}");
 
-        if (currentPlayer.MaxMana > 0)
+        if (currentPlayer.IsManaClass)
         {
             terminal.SetColor("gray");
             terminal.Write(" | Mana: ");
@@ -1744,6 +1744,17 @@ public abstract class BaseLocation
             terminal.Write("/");
             terminal.SetColor("blue");
             terminal.Write($"{currentPlayer.MaxMana}");
+        }
+        else
+        {
+            terminal.SetColor("gray");
+            terminal.Write(" | Stamina: ");
+            terminal.SetColor("yellow");
+            terminal.Write($"{currentPlayer.CurrentCombatStamina}");
+            terminal.SetColor("gray");
+            terminal.Write("/");
+            terminal.SetColor("yellow");
+            terminal.Write($"{currentPlayer.MaxCombatStamina}");
         }
 
         terminal.SetColor("gray");
@@ -1947,12 +1958,19 @@ public abstract class BaseLocation
         terminal.Write(" Gold:");
         terminal.SetColor("yellow");
         terminal.Write($"{currentPlayer.Gold:N0}");
-        if (currentPlayer.MaxMana > 0)
+        if (currentPlayer.IsManaClass)
         {
             terminal.SetColor("gray");
             terminal.Write(" Mana:");
             terminal.SetColor("blue");
             terminal.Write($"{currentPlayer.Mana}/{currentPlayer.MaxMana}");
+        }
+        else
+        {
+            terminal.SetColor("gray");
+            terminal.Write(" ST:");
+            terminal.SetColor("yellow");
+            terminal.Write($"{currentPlayer.CurrentCombatStamina}/{currentPlayer.MaxCombatStamina}");
         }
         terminal.SetColor("gray");
         terminal.Write(" Lv:");
@@ -2036,8 +2054,10 @@ public abstract class BaseLocation
                 string hpColor = hpPct < 0.25 ? "red" : hpPct < 0.50 ? "yellow" : "bright_green";
                 terminal.Write("[", "white");
                 terminal.Write($"{player.HP}hp", hpColor);
-                if (player.MaxMana > 0)
+                if (player.IsManaClass)
                     terminal.Write($" {player.Mana}mp", "cyan");
+                else
+                    terminal.Write($" {player.CurrentCombatStamina}st", "yellow");
                 terminal.Write("] ", "white");
             }
             var promptName = GetMudPromptName();
@@ -2623,17 +2643,28 @@ public abstract class BaseLocation
     {
         terminal.WriteLine("");
         int hpPercent = currentPlayer?.MaxHP > 0 ? (int)(100.0 * currentPlayer.CurrentHP / currentPlayer.MaxHP) : 0;
-        int mpPercent = currentPlayer?.MaxMana > 0 ? (int)(100.0 * currentPlayer.CurrentMana / currentPlayer.MaxMana) : 0;
 
         terminal.SetColor("bright_red");
         terminal.Write("  HP: ");
         terminal.SetColor(hpPercent > 50 ? "bright_green" : hpPercent > 25 ? "yellow" : "red");
         terminal.WriteLine($"{currentPlayer?.CurrentHP}/{currentPlayer?.MaxHP} ({hpPercent}%)");
 
-        terminal.SetColor("bright_blue");
-        terminal.Write("  MP: ");
-        terminal.SetColor(mpPercent > 50 ? "bright_cyan" : mpPercent > 25 ? "cyan" : "gray");
-        terminal.WriteLine($"{currentPlayer?.CurrentMana}/{currentPlayer?.MaxMana} ({mpPercent}%)");
+        if (currentPlayer?.IsManaClass == true)
+        {
+            int mpPercent = currentPlayer.MaxMana > 0 ? (int)(100.0 * currentPlayer.CurrentMana / currentPlayer.MaxMana) : 0;
+            terminal.SetColor("bright_blue");
+            terminal.Write("  MP: ");
+            terminal.SetColor(mpPercent > 50 ? "bright_cyan" : mpPercent > 25 ? "cyan" : "gray");
+            terminal.WriteLine($"{currentPlayer.CurrentMana}/{currentPlayer.MaxMana} ({mpPercent}%)");
+        }
+        else if (currentPlayer != null)
+        {
+            int stPercent = currentPlayer.MaxCombatStamina > 0 ? (int)(100.0 * currentPlayer.CurrentCombatStamina / currentPlayer.MaxCombatStamina) : 0;
+            terminal.SetColor("bright_yellow");
+            terminal.Write("  Stamina: ");
+            terminal.SetColor(stPercent > 50 ? "bright_yellow" : stPercent > 25 ? "yellow" : "gray");
+            terminal.WriteLine($"{currentPlayer.CurrentCombatStamina}/{currentPlayer.MaxCombatStamina} ({stPercent}%)");
+        }
 
         // Fatigue display (single-player only)
         if (!UsurperRemake.BBS.DoorMode.IsOnlineMode && currentPlayer != null)
@@ -4567,7 +4598,7 @@ public abstract class BaseLocation
 
         // Show temporary combat buffs (well-rested, god slayer, song, herbs)
         bool hasAnyBuff = currentPlayer.WellRestedCombats > 0 || currentPlayer.HasGodSlayerBuff
-            || currentPlayer.HasDarkPactBuff
+            || currentPlayer.HasDarkPactBuff || currentPlayer.HasSettlementBuff
             || currentPlayer.HasActiveSongBuff || currentPlayer.HasActiveHerbBuff
             || currentPlayer.LoversBlissCombats > 0 || currentPlayer.DivineBlessingCombats > 0;
         if (hasAnyBuff)
@@ -4583,6 +4614,21 @@ public abstract class BaseLocation
             {
                 terminal.SetColor("dark_red");
                 terminal.WriteLine($"  - Dark Pact: +{(int)(currentPlayer.DarkPactDamageBonus * 100)}% dmg ({currentPlayer.DarkPactCombats} combats)");
+            }
+            if (currentPlayer.HasSettlementBuff)
+            {
+                string buffName = ((UsurperRemake.Systems.SettlementBuffType)currentPlayer.SettlementBuffType) switch
+                {
+                    UsurperRemake.Systems.SettlementBuffType.XPBonus => "Settlement (XP)",
+                    UsurperRemake.Systems.SettlementBuffType.DefenseBonus => "Settlement (Def)",
+                    UsurperRemake.Systems.SettlementBuffType.DamageBonus => "Arena (Dmg)",
+                    UsurperRemake.Systems.SettlementBuffType.GoldBonus => "Thieves' Den (Gold)",
+                    UsurperRemake.Systems.SettlementBuffType.TrapResist => "Prison (Trap Resist)",
+                    UsurperRemake.Systems.SettlementBuffType.LibraryXP => "Library (XP)",
+                    _ => "Settlement"
+                };
+                terminal.SetColor("bright_green");
+                terminal.WriteLine($"  - {buffName}: +{(int)(currentPlayer.SettlementBuffValue * 100)}% ({currentPlayer.SettlementBuffCombats} combats)");
             }
             if (currentPlayer.WellRestedCombats > 0)
             {
@@ -7483,11 +7529,24 @@ public abstract class BaseLocation
         if (slot.IsArmorSlot() && invItem.Type != ObjType.Weapon && invItem.Type != ObjType.Shield)
             weightClass = ShopItemGenerator.InferArmorWeightClass(invItem.Name);
 
+        // Infer weapon type for weapons (needed for ability weapon requirements)
+        var weaponType = WeaponType.None;
+        if (invItem.Type == ObjType.Weapon)
+        {
+            var knownEquip = EquipmentDatabase.GetByName(invItem.Name);
+            weaponType = knownEquip?.WeaponType ?? ShopItemGenerator.InferWeaponType(invItem.Name);
+        }
+        else if (invItem.Type == ObjType.Shield)
+        {
+            weaponType = ShopItemGenerator.InferShieldType(invItem.Name);
+        }
+
         var equipment = new Equipment
         {
             Name = invItem.Name,
             Slot = slot,
             Handedness = handedness,
+            WeaponType = weaponType,
             WeaponPower = invItem.Attack,
             ArmorClass = invItem.Armor,
             WeightClass = weightClass,

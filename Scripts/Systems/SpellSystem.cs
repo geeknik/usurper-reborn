@@ -438,9 +438,7 @@ public static class SpellSystem
             return false;
 
         // Must be magic-using class
-        if (character.Class != CharacterClass.Cleric &&
-            character.Class != CharacterClass.Magician &&
-            character.Class != CharacterClass.Sage)
+        if (!HasSpells(character))
             return false;
 
         // Check weapon requirement for spell casting
@@ -1310,7 +1308,12 @@ public static class SpellSystem
     {
         return character.Class == CharacterClass.Cleric ||
                character.Class == CharacterClass.Magician ||
-               character.Class == CharacterClass.Sage;
+               character.Class == CharacterClass.Sage ||
+               character.Class == CharacterClass.Tidesworn ||
+               character.Class == CharacterClass.Wavecaller ||
+               character.Class == CharacterClass.Cyclebreaker ||
+               character.Class == CharacterClass.Abysswarden ||
+               character.Class == CharacterClass.Voidreaver;
     }
     
     /// <summary>

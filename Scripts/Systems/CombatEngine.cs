@@ -425,6 +425,15 @@ public partial class CombatEngine
                 player.SongBuffValue2 = 0f;
             }
         }
+        if (player.SettlementBuffCombats > 0)
+        {
+            player.SettlementBuffCombats--;
+            if (player.SettlementBuffCombats <= 0)
+            {
+                player.SettlementBuffType = 0;
+                player.SettlementBuffValue = 0f;
+            }
+        }
 
         // Ensure abilities are learned based on current level (fixes abilities not showing)
         if (!ClassAbilitySystem.IsSpellcaster(player.Class))
@@ -2566,6 +2575,12 @@ public partial class CombatEngine
             attackPower += (long)(attackPower * attacker.DarkPactDamageBonus);
         }
 
+        // Settlement Arena damage buff
+        if (attacker.HasSettlementBuff && attacker.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.DamageBonus)
+        {
+            attackPower += (long)(attackPower * attacker.SettlementBuffValue);
+        }
+
         // Fatigue damage penalty (single-player only)
         if (!UsurperRemake.BBS.DoorMode.IsOnlineMode && attacker.Fatigue >= GameConfig.FatigueTiredThreshold)
         {
@@ -3580,6 +3595,12 @@ public partial class CombatEngine
         if (player.HasGodSlayerBuff)
         {
             playerDefense += (long)(playerDefense * player.GodSlayerDefenseBonus);
+        }
+
+        // Settlement defense buff (Palisade)
+        if (player.HasSettlementBuff && player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.DefenseBonus)
+        {
+            playerDefense += (long)(playerDefense * player.SettlementBuffValue);
         }
 
         // Fatigue defense penalty (single-player only)
@@ -4806,6 +4827,22 @@ public partial class CombatEngine
         if (result.Player.HasStudy)
         {
             expReward += (long)(expReward * GameConfig.StudyXPBonus);
+        }
+
+        // Settlement Tavern XP bonus
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.XPBonus)
+        {
+            expReward += (long)(expReward * result.Player.SettlementBuffValue);
+        }
+        // Settlement Library XP bonus (stacks with Tavern via different buff type)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.LibraryXP)
+        {
+            expReward += (long)(expReward * result.Player.SettlementBuffValue);
+        }
+        // Settlement Thieves' Den gold bonus
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.GoldBonus)
+        {
+            goldReward += (long)(goldReward * result.Player.SettlementBuffValue);
         }
 
         // NG+ cycle XP multiplier
@@ -7353,17 +7390,30 @@ public partial class CombatEngine
         terminal.Write($"{player.HP,5}/{player.MaxHP,-5}");
         terminal.WriteLine("");
 
-        // Mana and resources line
-        terminal.SetColor("bright_cyan");
-        terminal.Write($"║ ");
-        terminal.SetColor("bright_blue");
-        terminal.Write($"MP:{manaBar} ");
-        terminal.SetColor("cyan");
-        terminal.Write($"{player.Mana,4}/{player.MaxMana,-4}  ");
-        terminal.SetColor("bright_magenta");
-        terminal.Write($"Potions: ");
-        terminal.SetColor("white");
-        terminal.WriteLine($"{player.Healing}/{player.MaxPotions}");
+        // Mana/resources line (only for mana classes)
+        if (player.IsManaClass)
+        {
+            terminal.SetColor("bright_cyan");
+            terminal.Write($"║ ");
+            terminal.SetColor("bright_blue");
+            terminal.Write($"MP:{manaBar} ");
+            terminal.SetColor("cyan");
+            terminal.Write($"{player.Mana,4}/{player.MaxMana,-4}  ");
+            terminal.SetColor("bright_magenta");
+            terminal.Write($"Potions: ");
+            terminal.SetColor("white");
+            terminal.WriteLine($"{player.Healing}/{player.MaxPotions}");
+        }
+        else
+        {
+            // Non-mana classes: show potions on the stamina line instead
+            terminal.SetColor("bright_cyan");
+            terminal.Write($"║ ");
+            terminal.SetColor("bright_magenta");
+            terminal.Write($"Potions: ");
+            terminal.SetColor("white");
+            terminal.WriteLine($"{player.Healing}/{player.MaxPotions}");
+        }
 
         // Stamina bar for combat abilities
         double staminaPercent = player.MaxCombatStamina > 0 ? Math.Max(0, Math.Min(1.0, (double)player.CurrentCombatStamina / player.MaxCombatStamina)) : 0;
@@ -7529,7 +7579,7 @@ public partial class CombatEngine
         terminal.Write("HP:");
         terminal.SetColor(pCol);
         terminal.Write($"{pBar} {player.HP}/{player.MaxHP}");
-        if (player.MaxMana > 0)
+        if (player.IsManaClass)
         {
             terminal.SetColor("gray");
             terminal.Write("  MP:");
@@ -13124,6 +13174,22 @@ public partial class CombatEngine
             if (mmVictoryBoons.GoldPercent > 0) adjustedGold += (long)(adjustedGold * mmVictoryBoons.GoldPercent);
         }
 
+        // Settlement Tavern XP bonus (multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.XPBonus)
+        {
+            adjustedExp += (long)(adjustedExp * result.Player.SettlementBuffValue);
+        }
+        // Settlement Library XP bonus (multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.LibraryXP)
+        {
+            adjustedExp += (long)(adjustedExp * result.Player.SettlementBuffValue);
+        }
+        // Settlement Thieves' Den gold bonus (multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.GoldBonus)
+        {
+            adjustedGold += (long)(adjustedGold * result.Player.SettlementBuffValue);
+        }
+
         // NG+ cycle XP multiplier
         if (result.Player.CycleExpMultiplier > 1.0f)
         {
@@ -13407,6 +13473,22 @@ public partial class CombatEngine
         {
             if (berserkBoons.XPPercent > 0) adjustedExp += (long)(adjustedExp * berserkBoons.XPPercent);
             if (berserkBoons.GoldPercent > 0) adjustedGold += (long)(adjustedGold * berserkBoons.GoldPercent);
+        }
+
+        // Settlement Tavern XP bonus (berserker/special multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.XPBonus)
+        {
+            adjustedExp += (long)(adjustedExp * result.Player.SettlementBuffValue);
+        }
+        // Settlement Library XP bonus (berserker/special multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.LibraryXP)
+        {
+            adjustedExp += (long)(adjustedExp * result.Player.SettlementBuffValue);
+        }
+        // Settlement Thieves' Den gold bonus (berserker/special multi-monster path)
+        if (result.Player.HasSettlementBuff && result.Player.SettlementBuffType == (int)UsurperRemake.Systems.SettlementBuffType.GoldBonus)
+        {
+            adjustedGold += (long)(adjustedGold * result.Player.SettlementBuffValue);
         }
 
         // NG+ cycle XP multiplier

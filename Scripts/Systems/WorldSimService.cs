@@ -79,6 +79,7 @@ namespace UsurperRemake.Systems
             LoadChildrenState();
             LoadMarriageRegistryState();
             LoadWorldEventsState();
+            LoadSettlementState();
 
             // Load last world daily reset time from world_state
             LoadLastWorldDailyReset();
@@ -371,8 +372,17 @@ namespace UsurperRemake.Systems
                 // Save world events (plagues, festivals, wars, etc.)
                 await SaveWorldEventsState();
 
+                // Save NPC settlement state
+                await SaveSettlementState();
+
                 // Prune old news with per-category caps (NPC news doesn't evict player news)
                 await sqlBackend.PruneAllNews(hoursToKeep: 48, maxNpcNews: 500, maxPlayerNews: 200);
+
+                // Prune combat telemetry (keep 7 days, max 1000 rows)
+                await sqlBackend.PruneCombatEvents(daysToKeep: 7, maxRows: 1000);
+
+                // Clean up orphaned data from deleted players
+                await sqlBackend.PruneOrphanedPlayerData();
             }
             catch (Exception ex)
             {
@@ -1090,6 +1100,49 @@ namespace UsurperRemake.Systems
             catch (Exception ex)
             {
                 DebugLogger.Instance.LogError("WORLDSIM", $"Failed to load world events: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Save NPC settlement state to the shared database.
+        /// </summary>
+        private async Task SaveSettlementState()
+        {
+            try
+            {
+                var settlement = SettlementSystem.Instance;
+                if (settlement == null) return;
+
+                var saveData = settlement.ToSaveData();
+                var json = JsonSerializer.Serialize(saveData, jsonOptions);
+                await sqlBackend.SaveWorldState("settlement", json);
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Instance.LogError("WORLDSIM", $"Failed to save settlement state: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Load NPC settlement state from world_state on startup.
+        /// </summary>
+        private void LoadSettlementState()
+        {
+            try
+            {
+                var json = sqlBackend.LoadWorldState("settlement").GetAwaiter().GetResult();
+                if (string.IsNullOrEmpty(json)) return;
+
+                var saveData = JsonSerializer.Deserialize<SettlementSaveData>(json, jsonOptions);
+                if (saveData != null)
+                {
+                    SettlementSystem.Instance.RestoreFromSaveData(saveData);
+                    DebugLogger.Instance.LogInfo("WORLDSIM", $"Loaded settlement state: {SettlementSystem.Instance.GetSettlerCount()} settlers, {SettlementSystem.Instance.State.Founded} founded");
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Instance.LogError("WORLDSIM", $"Failed to load settlement state: {ex.Message}");
             }
         }
 

@@ -716,7 +716,7 @@ public static class ShopItemGenerator
         return ArmorWeightClass.Light;
     }
 
-    private static WeaponType InferShieldType(string name)
+    public static WeaponType InferShieldType(string name)
     {
         if (name.Contains("Buckler"))
             return WeaponType.Buckler;

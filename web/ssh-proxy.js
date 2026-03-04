@@ -271,8 +271,8 @@ const CLASS_NAMES = {
 };
 
 const RACE_NAMES = {
-  0: 'Human', 1: 'Elf', 2: 'Dwarf', 3: 'Orc', 4: 'Halfling',
-  5: 'Gnoll', 6: 'Troll', 7: 'Mutant'
+  0: 'Human', 1: 'Hobbit', 2: 'Elf', 3: 'Half-Elf', 4: 'Dwarf',
+  5: 'Troll', 6: 'Orc', 7: 'Gnome', 8: 'Gnoll', 9: 'Mutant'
 };
 
 const FACTION_NAMES = {
@@ -423,47 +423,47 @@ function getDashSummary() {
   const pregnant = npcs.filter(n => n.pregnancyDueDate || n.PregnancyDueDate);
   const teams = new Set(npcs.filter(n => n.team || n.Team).map(n => n.team || n.Team).filter(t => t));
 
-  // Class distribution
+  // Class distribution (alive NPCs only — exclude permadead)
   const classDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const cls = CLASS_NAMES[n.class] || CLASS_NAMES[n.Class] || 'Unknown';
     classDist[cls] = (classDist[cls] || 0) + 1;
   });
 
-  // Race distribution
+  // Race distribution (alive only)
   const raceDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const race = RACE_NAMES[n.race] || RACE_NAMES[n.Race] || 'Unknown';
     raceDist[race] = (raceDist[race] || 0) + 1;
   });
 
-  // Faction distribution
+  // Faction distribution (alive only)
   const factionDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const fid = String(n.npcFaction !== undefined ? n.npcFaction : (n.NPCFaction !== undefined ? n.NPCFaction : -1));
     const fname = FACTION_NAMES[fid] || 'None';
     factionDist[fname] = (factionDist[fname] || 0) + 1;
   });
 
-  // Location distribution
+  // Location distribution (alive only)
   const locationDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const loc = n.location || n.Location || 'Unknown';
     locationDist[loc] = (locationDist[loc] || 0) + 1;
   });
 
-  // Level distribution (buckets)
+  // Level distribution (alive only)
   const levelDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const lvl = n.level || n.Level || 1;
     const bucket = Math.floor(lvl / 10) * 10;
     const key = `${bucket}-${bucket + 9}`;
     levelDist[key] = (levelDist[key] || 0) + 1;
   });
 
-  // Age distribution (buckets)
+  // Age distribution (alive only)
   const ageDist = {};
-  npcs.forEach(n => {
+  alive.forEach(n => {
     const age = n.age || n.Age || 0;
     if (age > 0) {
       const bucket = Math.floor(age / 10) * 10;
@@ -472,12 +472,12 @@ function getDashSummary() {
     }
   });
 
-  // Average level
-  const levels = npcs.map(n => n.level || n.Level || 1);
+  // Average level (alive only)
+  const levels = alive.map(n => n.level || n.Level || 1);
   const avgLevel = levels.length > 0 ? (levels.reduce((a, b) => a + b, 0) / levels.length).toFixed(1) : 0;
 
-  // Total gold
-  const totalGold = npcs.reduce((sum, n) => sum + (n.gold || n.Gold || 0), 0);
+  // Total gold (alive only)
+  const totalGold = alive.reduce((sum, n) => sum + (n.gold || n.Gold || 0), 0);
 
   // King - from NPC data (which NPC has isKing flag)
   const kingNpc = npcs.find(n => n.isKing || n.IsKing);

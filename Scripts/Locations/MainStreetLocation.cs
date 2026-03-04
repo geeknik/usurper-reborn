@@ -312,6 +312,12 @@ public class MainStreetLocation : BaseLocation
             terminal.SetColor("white"); terminal.Write("elations   ");
             terminal.SetColor("darkgray"); terminal.Write("["); terminal.SetColor("bright_yellow"); terminal.Write("Z"); terminal.SetColor("darkgray"); terminal.Write("]");
             terminal.SetColor("white"); terminal.Write("Team Corner");
+            if (UsurperRemake.Systems.SettlementSystem.Instance?.State.IsEstablished == true)
+            {
+                terminal.SetColor("darkgray"); terminal.Write("["); terminal.SetColor("bright_yellow"); terminal.Write(">"); terminal.SetColor("darkgray"); terminal.Write("]");
+                terminal.SetColor("bright_green"); terminal.Write("Outskirts");
+            }
+            terminal.WriteLine("");
         }
 
         // Always: Quit + Settings
@@ -589,7 +595,11 @@ public class MainStreetLocation : BaseLocation
             terminal.Write(" ");
             MI("=", "Stats", "white", C);
             MI("P", "rogress", "white", C);
-            ML("R", "elations", "white");
+            MI("R", "elations", "white", C);
+            if (UsurperRemake.Systems.SettlementSystem.Instance?.State.IsEstablished == true)
+                ML(">", "Outskirts", "bright_green");
+            else
+                terminal.WriteLine("");
         }
 
         // Row 7 - Shady areas + Quit (Y/X tier 3+, Q/~ always)
@@ -740,6 +750,8 @@ public class MainStreetLocation : BaseLocation
         {
             terminal.WriteLine("Exploration:");
             terminal.WriteLine("  E - Wilderness");
+            if (UsurperRemake.Systems.SettlementSystem.Instance?.State.IsEstablished == true)
+                terminal.WriteLine("  > - The Outskirts (Settlement)");
             terminal.WriteLine("");
         }
 
@@ -958,7 +970,16 @@ public class MainStreetLocation : BaseLocation
                 terminal.WriteLine("You head to the Dark Alley...", "gray");
                 await Task.Delay(1500);
                 throw new LocationExitException(GameLocation.DarkAlley);
-                
+
+            case ">":
+                if (UsurperRemake.Systems.SettlementSystem.Instance?.State.IsEstablished == true)
+                {
+                    terminal.WriteLine("You head beyond the gates to the settlement...", "gray");
+                    await Task.Delay(1500);
+                    throw new LocationExitException(GameLocation.Settlement);
+                }
+                return false;
+
             case "?":
                 await ShowHelp();
                 return false;

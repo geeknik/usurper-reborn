@@ -17,7 +17,7 @@ public static class SpellLearningSystem
     public static async Task ShowSpellLearningMenu(Character player, TerminalEmulator terminal)
     {
         if (terminal == null || player == null) return;
-        if (player.Class != CharacterClass.Cleric && player.Class != CharacterClass.Magician && player.Class != CharacterClass.Sage)
+        if (!SpellSystem.HasSpells(player))
         {
             terminal.WriteLine("Only magical professions can learn spells here.", "red");
             await Task.Delay(1000);

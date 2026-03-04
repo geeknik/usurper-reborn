@@ -393,6 +393,9 @@ public class WorldSimulator
 
         // Update relationships and social dynamics
         UpdateSocialDynamics();
+
+        // Process NPC settlement (autonomous town-building)
+        SettlementSystem.Instance?.ProcessTick(npcs.Where(n => n.IsAlive && !n.IsDead).ToList());
     }
 
     /// <summary>
@@ -1737,6 +1740,18 @@ public class WorldSimulator
                 activities.Add(("dark_alley", alleyWeight));
         }
 
+        // Settlement — community-minded NPCs may visit the outskirts settlement
+        if (SettlementSystem.Instance?.State.IsEstablished == true)
+        {
+            float settlementWeight = 0.08f;
+            if (npc.Brain?.Personality != null)
+            {
+                settlementWeight += npc.Brain.Personality.Sociability * 0.06f;
+                if (npc.Brain.Personality.Aggression < 0.3f) settlementWeight += 0.04f;
+            }
+            activities.Add(("settlement", settlementWeight));
+        }
+
         // Inn - rest, socialize, drink, gossip (main social hub)
         {
             float innWeight = 0.15f; // Strong base — the Inn is where everyone gathers
@@ -1896,6 +1911,12 @@ public class WorldSimulator
                 npc.CurrentActivity = "having a drink at the bar";
                 npc.EmotionalState?.AddEmotion(EmotionType.Joy, 0.3f, 60);
                 npc.EmotionalState?.AddEmotion(EmotionType.Peace, 0.3f, 90);
+                break;
+            case "settlement":
+                npc.CurrentLocation = "Settlement";
+                npc.CurrentActivity = "helping build the settlement";
+                npc.EmotionalState?.AddEmotion(EmotionType.Joy, 0.3f, 60);
+                npc.EmotionalState?.AddEmotion(EmotionType.Hope, 0.3f, 90);
                 break;
         }
     }

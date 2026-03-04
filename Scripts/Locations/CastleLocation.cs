@@ -4077,71 +4077,69 @@ public class CastleLocation : BaseLocation
             Sex = random.Next(2) == 0 ? CharacterSex.Male : CharacterSex.Female
         };
 
-        // Stats scale with level — includes built-in gear (WeapPow/ArmPow represent equipment)
-        // Quadratic HP component ensures bodyguards scale with high-level monster damage
-        // At level 10: +3 HP (negligible). At level 50: +83 HP. At level 90: +270 HP.
-        int quadHP = (level * level) / 30;
+        // Stats scale with level — aligned with normal NPC scaling from NPCSpawnSystem
+        // WeapPow/ArmPow represent built-in gear (NPCs get theirs from equipment)
         switch (role)
         {
             case "Tank":
                 merc.Class = CharacterClass.Warrior;
-                merc.HP = merc.MaxHP = 120 + level * 45 + quadHP * 2;
-                merc.Strength = 12 + level * 4;
-                merc.Defence = 12 + level * 5;
-                merc.WeapPow = 8 + level * 3;
-                merc.ArmPow = 10 + level * 5;
-                merc.Agility = 5 + level * 2;
-                merc.Dexterity = 5 + level * 2;
-                merc.Constitution = 10 + level * 4;
-                merc.Wisdom = 3 + level;
-                merc.Intelligence = 3 + level;
+                merc.HP = merc.MaxHP = 100 + level * 50;       // Matches NPC Warrior
+                merc.Strength = 10 + level * 5;                 // NPC base STR
+                merc.Defence = 10 + level * 3;                  // NPC base DEF
+                merc.WeapPow = 5 + level * 2;
+                merc.ArmPow = 5 + level * 3;
+                merc.Agility = 10 + level * 2;
+                merc.Dexterity = 10 + level * 2;
+                merc.Constitution = 10 + level * 2;
+                merc.Wisdom = 10 + level;
+                merc.Intelligence = 10 + level;
                 merc.Healing = 3;
                 break;
 
             case "Healer":
                 merc.Class = CharacterClass.Cleric;
-                merc.HP = merc.MaxHP = 80 + level * 30 + quadHP;
-                merc.Mana = merc.MaxMana = 50 + level * 10;
-                merc.Strength = 5 + level * 2;
-                merc.Defence = 8 + level * 3;
-                merc.WeapPow = 3 + level * 2;
-                merc.ArmPow = 6 + level * 4;
-                merc.Agility = 4 + level * 2;
-                merc.Dexterity = 4 + level * 2;
-                merc.Constitution = 6 + level * 2;
-                merc.Wisdom = 10 + level * 5;
-                merc.Intelligence = 8 + level * 4;
+                merc.HP = merc.MaxHP = 80 + level * 40;        // Matches NPC Cleric
+                merc.Mana = merc.MaxMana = 40 + level * 10;
+                merc.Strength = 10 + level * 2;
+                merc.Defence = 10 + level * 3;
+                merc.WeapPow = 3 + level;
+                merc.ArmPow = 5 + level * 2;
+                merc.Agility = 10 + level * 2;
+                merc.Dexterity = 10 + level * 2;
+                merc.Constitution = 10 + level * 2;
+                merc.Wisdom = 10 + level * 4;                   // NPC Cleric WIS bonus
+                merc.Intelligence = 10 + level * 2;
                 merc.Healing = 5;
                 break;
 
             case "DPS":
                 merc.Class = CharacterClass.Ranger;
-                merc.HP = merc.MaxHP = 100 + level * 35 + quadHP;
-                merc.Strength = 14 + level * 5;
-                merc.Defence = 6 + level * 3;
-                merc.WeapPow = 10 + level * 4;
-                merc.ArmPow = 4 + level * 3;
-                merc.Agility = 10 + level * 4;
-                merc.Dexterity = 10 + level * 4;
-                merc.Constitution = 6 + level * 2;
-                merc.Wisdom = 3 + level;
-                merc.Intelligence = 3 + level;
+                merc.HP = merc.MaxHP = 80 + level * 40;        // NPC default HP
+                merc.Strength = 10 + level * 5;                 // NPC base STR
+                merc.Defence = 10 + level * 3;
+                merc.WeapPow = 5 + level * 3;
+                merc.ArmPow = 3 + level * 2;
+                merc.Agility = 10 + level * 3;
+                merc.Dexterity = 10 + level * 3;
+                merc.Constitution = 10 + level * 2;
+                merc.Wisdom = 10 + level;
+                merc.Intelligence = 10 + level;
                 merc.Healing = 3;
                 break;
 
             case "Support":
                 merc.Class = CharacterClass.Paladin;
-                merc.HP = merc.MaxHP = 100 + level * 35 + quadHP;
+                merc.HP = merc.MaxHP = 80 + level * 40;        // Matches NPC Paladin
                 merc.Mana = merc.MaxMana = 30 + level * 8;
-                merc.Strength = 8 + level * 3;
-                merc.Defence = 10 + level * 4;
-                merc.WeapPow = 6 + level * 3;
-                merc.ArmPow = 8 + level * 4;
-                merc.Agility = 6 + level * 3;
-                merc.Dexterity = 6 + level * 3;
-                merc.Constitution = 8 + level * 3;
-                merc.Wisdom = 8 + level * 3;
-                merc.Intelligence = 6 + level * 2;
+                merc.Strength = 10 + level * 3;
+                merc.Defence = 10 + level * 3;
+                merc.WeapPow = 5 + level * 2;
+                merc.ArmPow = 5 + level * 3;
+                merc.Agility = 10 + level * 2;
+                merc.Dexterity = 10 + level * 2;
+                merc.Constitution = 10 + level * 2;
+                merc.Wisdom = 10 + level * 3;                   // NPC Paladin WIS bonus
+                merc.Intelligence = 10 + level * 2;
                 merc.Healing = 4;
                 break;
         }

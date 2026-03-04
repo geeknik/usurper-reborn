@@ -527,8 +527,8 @@ public class MudServer
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(displayName))
-                username = displayName;
+            // Do NOT replace username with displayName — displayName is cosmetic.
+            // The session identity must always be the login key (account name).
 
             // Kick existing session if duplicate (reconnect takes priority)
             var interactiveKey = username!.ToLowerInvariant();

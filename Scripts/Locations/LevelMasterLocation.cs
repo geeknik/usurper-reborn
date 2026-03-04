@@ -350,12 +350,32 @@ public class LevelMasterLocation : BaseLocation
 
         if (ClassAbilitySystem.IsSpellcaster(currentPlayer.Class))
         {
+            // Pure caster — spell menu only
             terminal.WriteLine($"\"{currentPlayer.DisplayName}, let me teach you the arcane arts...\"");
             await Task.Delay(800);
             await SpellLearningSystem.ShowSpellLearningMenu(currentPlayer, terminal);
         }
+        else if (SpellSystem.HasSpells(currentPlayer))
+        {
+            // Prestige hybrid — both abilities and spells
+            terminal.WriteLine($"\"{currentPlayer.DisplayName}, your power spans both martial and arcane arts...\"");
+            terminal.WriteLine("");
+            terminal.WriteLine("  [A] Combat Abilities", "bright_yellow");
+            terminal.WriteLine("  [S] Spell Library", "bright_cyan");
+            terminal.WriteLine("");
+            var choice = await terminal.GetInput("Your choice: ");
+            if (choice.Equals("S", StringComparison.OrdinalIgnoreCase))
+            {
+                await SpellLearningSystem.ShowSpellLearningMenu(currentPlayer, terminal);
+            }
+            else
+            {
+                await ClassAbilitySystem.ShowAbilityLearningMenu(currentPlayer, terminal);
+            }
+        }
         else
         {
+            // Pure ability user — ability menu only
             terminal.WriteLine($"\"Come, {currentPlayer.DisplayName}. Let me show you the way of the warrior...\"");
             await Task.Delay(800);
             await ClassAbilitySystem.ShowAbilityLearningMenu(currentPlayer, terminal);
@@ -632,7 +652,6 @@ public class LevelMasterLocation : BaseLocation
                 player.BaseIntelligence += 3;
                 player.BaseWisdom += 2;
                 player.BaseDexterity += 2;
-                player.BaseMaxMana += 10;
                 player.BaseMaxHP += 5;
                 player.BaseConstitution += 2;
                 break;
@@ -659,7 +678,6 @@ public class LevelMasterLocation : BaseLocation
                 player.BaseWisdom += 2;
                 player.BaseCharisma += 2;
                 player.BaseMaxHP += 10;
-                player.BaseMaxMana += 5;
                 player.BaseDefence += 1;
                 break;
 
@@ -695,7 +713,6 @@ public class LevelMasterLocation : BaseLocation
                 player.BaseAgility += 2;
                 player.BaseIntelligence += 2;
                 player.BaseMaxHP += 5;
-                player.BaseMaxMana += 5;
                 break;
 
             // NG+ Prestige Classes — strictly stronger, both spells AND abilities

@@ -182,9 +182,11 @@ public partial class GameEngine
         int slot = 0;
 
         bool isSpellcaster = ClassAbilitySystem.IsSpellcaster(player.Class);
+        bool hasSpells = SpellSystem.HasSpells(player);
+
         if (isSpellcaster)
         {
-            // Fill with known spells ordered by level
+            // Pure caster: fill with known spells ordered by level
             var knownSpells = SpellSystem.GetAvailableSpells(player);
             foreach (var spell in knownSpells.OrderBy(s => s.Level))
             {
@@ -203,6 +205,18 @@ public partial class GameEngine
                 player.Quickbar[slot] = ability.Id;
                 slot++;
             }
+
+            // Hybrid (prestige): also add known spells in remaining slots
+            if (hasSpells)
+            {
+                var knownSpells = SpellSystem.GetAvailableSpells(player);
+                foreach (var spell in knownSpells.OrderBy(s => s.Level))
+                {
+                    if (slot >= 9) break;
+                    player.Quickbar[slot] = $"spell:{spell.Level}";
+                    slot++;
+                }
+            }
         }
     }
 
@@ -220,6 +234,8 @@ public partial class GameEngine
         var equipped = new HashSet<string>(player.Quickbar.Where(s => s != null)!);
 
         bool isSpellcaster = ClassAbilitySystem.IsSpellcaster(player.Class);
+        bool hasSpells = SpellSystem.HasSpells(player);
+
         if (isSpellcaster)
         {
             var knownSpells = SpellSystem.GetAvailableSpells(player);
@@ -243,6 +259,21 @@ public partial class GameEngine
                 if (emptySlot < 0) break; // No empty slots
                 player.Quickbar[emptySlot] = ability.Id;
                 equipped.Add(ability.Id);
+            }
+
+            // Hybrid (prestige): also add new spells to remaining slots
+            if (hasSpells)
+            {
+                var knownSpells = SpellSystem.GetAvailableSpells(player);
+                foreach (var spell in knownSpells.OrderBy(s => s.Level))
+                {
+                    string id = $"spell:{spell.Level}";
+                    if (equipped.Contains(id)) continue;
+                    int emptySlot = player.Quickbar.IndexOf(null);
+                    if (emptySlot < 0) break;
+                    player.Quickbar[emptySlot] = id;
+                    equipped.Add(id);
+                }
             }
         }
     }
@@ -3751,6 +3782,11 @@ public partial class GameEngine
         player.HasShatteredSealFragment = playerData.HasShatteredSealFragment;
         player.HasTouchedTheVoid = playerData.HasTouchedTheVoid;
 
+        // NPC Settlement buffs (v0.49.5)
+        player.SettlementBuffType = playerData.SettlementBuffType;
+        player.SettlementBuffCombats = playerData.SettlementBuffCombats;
+        player.SettlementBuffValue = playerData.SettlementBuffValue;
+
         // Restore chest contents
         var playerKey = (player is Player pp ? pp.RealName : player.Name2) ?? player.Name2;
         if (playerData.ChestContents != null && playerData.ChestContents.Count > 0)
@@ -4049,6 +4085,12 @@ public partial class GameEngine
         {
             UsurperRemake.Systems.MarketplaceSystem.Instance.LoadFromSaveData(worldState.MarketplaceListings);
             // GD.Print($"[GameEngine] Restored {worldState.MarketplaceListings.Count} marketplace listings");
+        }
+
+        // Restore NPC settlement state
+        if (worldState.Settlement != null)
+        {
+            UsurperRemake.Systems.SettlementSystem.Instance.RestoreFromSaveData(worldState.Settlement);
         }
 
         // GD.Print($"[GameEngine] World state restored: {worldState.ActiveEvents?.Count ?? 0} active events, {worldState.ActiveQuests?.Count ?? 0} quests");

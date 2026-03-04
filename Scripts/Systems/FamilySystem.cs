@@ -277,6 +277,9 @@ namespace UsurperRemake.Systems
             npc.Personality = personality;
             npc.Brain = new NPCBrain(npc, personality);
 
+            // Assign faction based on class, alignment, and personality
+            npc.NPCFaction = NPCSpawnSystem.Instance?.DetermineFactionForNPC(npc);
+
             // Register with NPC system
             NPCSpawnSystem.Instance?.AddRestoredNPC(npc);
 

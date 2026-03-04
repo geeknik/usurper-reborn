@@ -510,6 +510,11 @@ namespace UsurperRemake.Systems
         public bool HasShatteredSealFragment { get; set; }
         public bool HasTouchedTheVoid { get; set; }
 
+        // NPC Settlement buffs (v0.49.5)
+        public int SettlementBuffType { get; set; }
+        public int SettlementBuffCombats { get; set; }
+        public float SettlementBuffValue { get; set; }
+
         // Faction consumable properties (v0.40.2)
         public int PoisonCoatingCombats { get; set; }
         public int ActivePoisonType { get; set; }   // PoisonType enum cast to int
@@ -850,6 +855,9 @@ namespace UsurperRemake.Systems
 
         // Marketplace listings
         public List<MarketListingData> MarketplaceListings { get; set; } = new();
+
+        // NPC Settlement state (v0.49.5)
+        public UsurperRemake.Systems.SettlementSaveData? Settlement { get; set; }
     }
 
     /// <summary>
