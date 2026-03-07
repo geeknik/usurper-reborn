@@ -574,6 +574,12 @@ namespace UsurperRemake.Systems
             // Give some healing potions
             npc.Healing = random.Next(npc.Level, npc.Level * 3);
 
+            // Give mana potions to spellcaster NPCs
+            if (ClassAbilitySystem.IsSpellcaster(npc.Class))
+            {
+                npc.ManaPotions = random.Next(npc.Level / 2, npc.Level * 2);
+            }
+
             // Initialize inventory if needed
             if (npc.Item == null)
                 npc.Item = new List<int>();

@@ -2786,6 +2786,32 @@ public abstract class BaseLocation
                 terminal.WriteLine("");
         }
 
+        // Fame display
+        if (currentPlayer != null)
+        {
+            terminal.SetColor("white");
+            terminal.Write("  Fame: ");
+            string fameLabel = currentPlayer.Fame switch
+            {
+                >= 200 => "Legendary",
+                >= 100 => "Renowned",
+                >= 50 => "Well-Known",
+                >= 20 => "Notable",
+                >= 1 => "Unknown",
+                _ => "Nobody"
+            };
+            string fameColor = currentPlayer.Fame switch
+            {
+                >= 200 => "bright_yellow",
+                >= 100 => "bright_cyan",
+                >= 50 => "cyan",
+                >= 20 => "green",
+                _ => "gray"
+            };
+            terminal.SetColor(fameColor);
+            terminal.WriteLine($"{fameLabel} ({currentPlayer.Fame})");
+        }
+
         terminal.WriteLine("");
         await terminal.PressAnyKey();
     }

@@ -613,6 +613,7 @@ namespace UsurperRemake.Systems
                     Name2 = companion.Name,
                     Level = companion.Level,
                     Healing = companion.HealingPotions,
+                    ManaPotions = companion.ManaPotions,
                     Class = companion.CombatRole switch
                     {
                         CombatRole.Tank => CharacterClass.Warrior,
@@ -761,6 +762,7 @@ namespace UsurperRemake.Systems
                 if (companions.TryGetValue(charWrapper.CompanionId.Value, out var companion))
                 {
                     companion.HealingPotions = (int)charWrapper.Healing;
+                    companion.ManaPotions = (int)charWrapper.ManaPotions;
                 }
             }
         }
@@ -1985,6 +1987,14 @@ namespace UsurperRemake.Systems
             // Companions get potions based on level - healers get fewer since they use spells
             int basePotions = (companion.CombatRole == CombatRole.Healer || companion.CombatRole == CombatRole.Bard) ? 2 : 5;
             companion.HealingPotions = Math.Min(basePotions + companion.Level / 2, companion.MaxHealingPotions);
+
+            // Caster companions also stock mana potions
+            if (companion.CombatRole == CombatRole.Healer || companion.CombatRole == CombatRole.Hybrid ||
+                companion.CombatRole == CombatRole.Bard)
+            {
+                int baseMana = 3 + companion.Level / 3;
+                companion.ManaPotions = Math.Min(baseMana, companion.MaxManaPotions);
+            }
         }
 
         /// <summary>
@@ -2222,6 +2232,10 @@ namespace UsurperRemake.Systems
         // Healing potions (NPCs manage their own supply)
         public int HealingPotions { get; set; } = 0;
         public int MaxHealingPotions => 5 + Level;
+
+        // Mana potions (caster companions manage their own supply)
+        public int ManaPotions { get; set; } = 0;
+        public int MaxManaPotions => 3 + Level / 2;
 
         // Equipment system - maps slot to equipment database ID (same as Character.EquippedItems)
         public Dictionary<EquipmentSlot, int> EquippedItems { get; set; } = new();

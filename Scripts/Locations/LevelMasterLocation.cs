@@ -726,7 +726,7 @@ public class LevelMasterLocation : BaseLocation
             case CharacterClass.Barbarian:
                 player.BaseStrength += 4;     // v0.47.5: was 5, reduced to curb one-shot damage
                 player.BaseConstitution += 4;
-                player.BaseMaxHP += 15;
+                player.BaseMaxHP += 12;       // v0.50.5: was 15, glass cannon needs to feel glass
                 player.BaseStamina += 2;
                 break;
 

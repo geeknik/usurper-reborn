@@ -913,6 +913,7 @@ public class ArmorShopLocation : BaseLocation
                     currentPlayer.Inventory.Remove(item);
                 currentPlayer.Gold += totalGold;
                 currentPlayer.Statistics.RecordSale(totalGold);
+                DebugLogger.Instance.LogInfo("GOLD", $"SHOP SELL: {currentPlayer.DisplayName} sold {sellable.Count} armor for {totalGold:N0}g (gold now {currentPlayer.Gold:N0})");
                 currentPlayer.RecalculateStats();
 
                 terminal.SetColor("bright_green");
@@ -963,7 +964,8 @@ public class ArmorShopLocation : BaseLocation
             }
 
             currentPlayer.Gold += price;
-            currentPlayer.Statistics.RecordSale(price);  // Track sale in statistics
+            currentPlayer.Statistics.RecordSale(price);
+            DebugLogger.Instance.LogInfo("GOLD", $"SHOP SELL: {currentPlayer.DisplayName} sold armor for {price:N0}g (gold now {currentPlayer.Gold:N0})");
             currentPlayer.RecalculateStats();
 
             // Track shop sale telemetry

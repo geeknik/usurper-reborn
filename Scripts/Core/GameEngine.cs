@@ -2237,6 +2237,9 @@ public partial class GameEngine
                 return;
             }
 
+            // Gold audit snapshot on login
+            DebugLogger.Instance.LogInfo("GOLD_LOGIN", $"{currentPlayer.Name} Lv{currentPlayer.Level} LOGIN gold={currentPlayer.Gold:N0} bank={currentPlayer.BankGold:N0} totalEarned={currentPlayer.Statistics?.TotalGoldEarned ?? 0:N0} totalWealth={currentPlayer.Gold + currentPlayer.BankGold:N0}");
+
             // Load daily system state
             if (dailyManager != null)
             {

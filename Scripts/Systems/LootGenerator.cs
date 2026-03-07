@@ -1143,13 +1143,14 @@ public static class LootGenerator
             int hpBonus = finalPower;
             int manaBonus = Math.Max(1, finalPower * 3 / 4);
 
-            // Caster/Focus themed → Wisdom + Mana
+            // Caster/Focus themed → Intelligence (spell damage) + Mana
             if (name.Contains("focus") || name.Contains("wizard") || name.Contains("archmage") ||
                 name.Contains("arcane") || name.Contains("enchanted") || name.Contains("mystic") ||
                 name.Contains("mage"))
             {
-                item.Wisdom += primaryStat;
                 item.Mana += manaBonus;
+                // Store INT as a LootEffect so it transfers to Equipment.IntelligenceBonus
+                item.LootEffects.Add(((int)SpecialEffect.Intelligence, primaryStat));
             }
             // Holy/Divine themed → Wisdom + HP
             else if (name.Contains("holy") || name.Contains("sacred") || name.Contains("blessed") ||

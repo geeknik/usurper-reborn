@@ -1227,20 +1227,32 @@ namespace UsurperRemake.Systems
                     }
                     else
                     {
-                        // Apply rewards via DB for offline/other online players
-                        await backend.AddXPToPlayer(entry.PlayerName, xpReward);
-                        await backend.AddGoldToPlayer(entry.PlayerName, goldReward);
+                        // Check if this player is online — if so, apply in-memory to avoid
+                        // race condition with SQL add (session save would double-count)
+                        var session = FindOnlineSession(entry.PlayerName);
+                        bool isOnline = session?.Context?.Engine?.CurrentPlayer != null;
+
+                        if (!isOnline)
+                        {
+                            // Offline player: apply via SQL (will be loaded on next login)
+                            await backend.AddXPToPlayer(entry.PlayerName, xpReward);
+                            await backend.AddGoldToPlayer(entry.PlayerName, goldReward);
+                        }
 
                         // Send notification message
                         string msg = $"World Boss Defeated! You earned {xpReward:N0} XP and {goldReward:N0} gold " +
                                      $"for your contribution ({tierName}: {entry.DamageDealt:N0} damage).";
                         await backend.SendMessage("System", entry.PlayerName, "world_boss", msg);
 
-                        // Try to deliver loot to online player's session
-                        var session = FindOnlineSession(entry.PlayerName);
-                        if (session?.Context?.Engine?.CurrentPlayer != null)
+                        // Deliver rewards and loot to online player's session
+                        if (isOnline)
                         {
-                            var onlinePlayer = session.Context.Engine.CurrentPlayer;
+                            var onlinePlayer = session!.Context!.Engine!.CurrentPlayer!;
+
+                            // Apply rewards in-memory only (saved with next session save)
+                            onlinePlayer.Experience += xpReward;
+                            onlinePlayer.Gold += goldReward;
+
                             var lootItem = LootGenerator.GenerateWorldBossLoot(
                                 bossLevel, minRarity, bossDef.Element,
                                 onlinePlayer.Class);
@@ -1248,10 +1260,13 @@ namespace UsurperRemake.Systems
                             if (lootItem != null)
                             {
                                 onlinePlayer.Inventory.Add(lootItem);
-                                onlinePlayer.Experience += xpReward;
-                                onlinePlayer.Gold += goldReward;
                                 session.EnqueueMessage(
                                     $"\n  *** World Boss Rewards ({tierName}): +{xpReward:N0} XP, +{goldReward:N0} gold, {lootItem.Name} ***");
+                            }
+                            else
+                            {
+                                session.EnqueueMessage(
+                                    $"\n  *** World Boss Rewards ({tierName}): +{xpReward:N0} XP, +{goldReward:N0} gold ***");
                             }
 
                             // Record stats for online players

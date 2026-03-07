@@ -6820,14 +6820,23 @@ public class DungeonLocation : BaseLocation
                 BroadcastDungeonEvent("\u001b[91m  The chest was a MIMIC!\u001b[0m");
                 await Task.Delay(1500);
 
+                // Use MonsterGenerator stats so mimics scale like other mini-bosses
+                int mimicLevel = currentDungeonLevel;
+                long mimicBaseHP = (long)((50 * mimicLevel) + Math.Pow(mimicLevel, 1.2) * 15);
+                long mimicHP = (long)(mimicBaseHP * 1.5f); // mini-boss multiplier
+                long mimicStr = (long)(((2 * mimicLevel) + Math.Pow(mimicLevel, 1.05) * 1.5) * 1.5f);
+                long mimicDef = (long)(((mimicLevel) + Math.Pow(mimicLevel, 1.02) * 0.5) * 1.5f);
+                long mimicPunch = (long)(((mimicLevel) + Math.Pow(mimicLevel, 1.02) * 0.5) * 1.5f);
+                long mimicWeapPow = (long)(((1.5 * mimicLevel) + Math.Pow(mimicLevel, 1.05) * 1) * 1.5f);
+                long mimicArmPow = (long)(((0.5 * mimicLevel) + Math.Pow(mimicLevel, 1.02) * 0.3) * 1.5f * 0.7f);
                 var mimic = Monster.CreateMonster(
-                    currentDungeonLevel, "Mimic",
-                    currentDungeonLevel * 15, currentDungeonLevel * 4, 0,
+                    mimicLevel, "Mimic",
+                    mimicHP, mimicStr, mimicDef,
                     "Fooled you!", false, false, "Teeth", "Wooden Shell",
-                    false, false, currentDungeonLevel * 5, currentDungeonLevel * 3, currentDungeonLevel * 3
+                    false, false, mimicPunch, mimicArmPow, mimicWeapPow
                 );
                 mimic.IsMiniBoss = true;  // Mimics are elite encounters, not floor bosses
-                mimic.Level = currentDungeonLevel;
+                mimic.Level = mimicLevel;
 
                 var combatEngine = new CombatEngine(terminal);
                 var combatResult = await combatEngine.PlayerVsMonster(currentPlayer, mimic, teammates);

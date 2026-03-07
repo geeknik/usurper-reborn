@@ -1008,6 +1008,7 @@ public class WeaponShopLocation : BaseLocation
                     currentPlayer.Inventory.Remove(item);
                 currentPlayer.Gold += totalGold;
                 currentPlayer.Statistics.RecordSale(totalGold);
+                DebugLogger.Instance.LogInfo("GOLD", $"SHOP SELL: {currentPlayer.DisplayName} sold {sellable.Count} weapons for {totalGold:N0}g (gold now {currentPlayer.Gold:N0})");
                 currentPlayer.RecalculateStats();
 
                 terminal.SetColor("bright_green");
@@ -1056,7 +1057,8 @@ public class WeaponShopLocation : BaseLocation
             }
 
             currentPlayer.Gold += price;
-            currentPlayer.Statistics.RecordSale(price);  // Track sale in statistics
+            currentPlayer.Statistics.RecordSale(price);
+            DebugLogger.Instance.LogInfo("GOLD", $"SHOP SELL: {currentPlayer.DisplayName} sold weapon for {price:N0}g (gold now {currentPlayer.Gold:N0})");
             currentPlayer.RecalculateStats();
 
             // Track shop sale telemetry

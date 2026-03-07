@@ -347,6 +347,7 @@ public class ArenaLocation : BaseLocation
             // Apply gold reward (XP and kill tracking already handled by CombatEngine)
             currentPlayer.Gold += goldStolen;
             currentPlayer.Statistics?.RecordGoldChange(currentPlayer.Gold);
+            DebugLogger.Instance.LogInfo("GOLD", $"ARENA VICTORY: {currentPlayer.DisplayName} stole {goldStolen:N0}g from {target.DisplayName} (gold now {currentPlayer.Gold:N0})");
 
             // Deduct gold from defender's save atomically
             if (goldStolen > 0)

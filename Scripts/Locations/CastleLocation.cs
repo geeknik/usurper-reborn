@@ -2439,6 +2439,7 @@ public class CastleLocation : BaseLocation
             {
                 currentKing.Treasury -= amount;
                 currentPlayer.Gold += amount;
+                DebugLogger.Instance.LogInfo("GOLD", $"TREASURY WITHDRAW: {currentPlayer.DisplayName} withdrew {amount:N0}g from treasury (gold now {currentPlayer.Gold:N0}, treasury now {currentKing.Treasury:N0})");
                 terminal.SetColor("bright_green");
                 terminal.WriteLine($"Withdrew {amount:N0} gold from the treasury.");
                 PersistRoyalCourtToWorldState();

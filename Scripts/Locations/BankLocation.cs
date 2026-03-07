@@ -510,9 +510,12 @@ public class BankLocation : BaseLocation
         }
 
         // Process deposit (with overflow protection)
+        long goldBefore = currentPlayer.Gold;
+        long bankBefore = currentPlayer.BankGold;
         currentPlayer.Gold -= amount;
         currentPlayer.BankGold = SafeAddGold(currentPlayer.BankGold, amount);
         _safeContents = SafeAddGold(_safeContents, amount);
+        DebugLogger.Instance.LogInfo("GOLD", $"BANK DEPOSIT: {currentPlayer.DisplayName} deposited {amount:N0}g (gold {goldBefore:N0}->{currentPlayer.Gold:N0}, bank {bankBefore:N0}->{currentPlayer.BankGold:N0})");
 
         terminal.SetColor("bright_green");
         terminal.WriteLine("");
@@ -596,9 +599,12 @@ public class BankLocation : BaseLocation
         }
 
         // Process withdrawal
+        long goldBeforeW = currentPlayer.Gold;
+        long bankBeforeW = currentPlayer.BankGold;
         currentPlayer.BankGold -= amount;
         currentPlayer.Gold += amount;
         _safeContents = Math.Max(0, _safeContents - amount);
+        DebugLogger.Instance.LogInfo("GOLD", $"BANK WITHDRAW: {currentPlayer.DisplayName} withdrew {amount:N0}g (gold {goldBeforeW:N0}->{currentPlayer.Gold:N0}, bank {bankBeforeW:N0}->{currentPlayer.BankGold:N0})");
 
         terminal.SetColor("bright_yellow");
         terminal.WriteLine("");
@@ -704,8 +710,10 @@ public class BankLocation : BaseLocation
         }
 
         // Process transfer
+        long bankBeforeT = currentPlayer.BankGold;
         currentPlayer.BankGold -= amount;
         recipient.Gold += amount; // NPCs get it as cash
+        DebugLogger.Instance.LogInfo("GOLD", $"BANK TRANSFER: {currentPlayer.DisplayName} transferred {amount:N0}g to {recipient.Name} (bank {bankBeforeT:N0}->{currentPlayer.BankGold:N0})");
 
         terminal.SetColor("bright_green");
         terminal.WriteLine("");
@@ -823,8 +831,10 @@ public class BankLocation : BaseLocation
             if (long.TryParse(loanInput, out long loanAmount) && loanAmount > 0)
             {
                 loanAmount = Math.Min(loanAmount, maxLoan);
+                long goldBeforeLoan = currentPlayer.Gold;
                 currentPlayer.Gold += loanAmount;
                 currentPlayer.Loan = loanAmount;
+                DebugLogger.Instance.LogInfo("GOLD", $"BANK LOAN: {currentPlayer.DisplayName} took loan {loanAmount:N0}g (gold {goldBeforeLoan:N0}->{currentPlayer.Gold:N0})");
 
                 terminal.SetColor("bright_green");
                 terminal.WriteLine($"Loan approved! {loanAmount:N0} gold has been added to your purse.");
@@ -1319,8 +1329,10 @@ public class BankLocation : BaseLocation
         {
             // Calculate loot (25% of safe) with overflow protection
             long stolenGold = _safeContents / 4;
+            long goldBeforeRob = currentPlayer.Gold;
             currentPlayer.Gold = SafeAddGold(currentPlayer.Gold, stolenGold);
             _safeContents -= stolenGold;
+            DebugLogger.Instance.LogInfo("GOLD", $"BANK ROBBERY: {currentPlayer.DisplayName} stole {stolenGold:N0}g (gold {goldBeforeRob:N0}->{currentPlayer.Gold:N0})");
 
             terminal.WriteLine("");
             WriteBoxHeader($"SUCCESS! You stole {stolenGold:N0} gold!", "bright_green");
@@ -1400,7 +1412,7 @@ public class BankLocation : BaseLocation
         if (player.BankGuard && player.IsAlive)
         {
             player.BankGold += player.BankWage;
-            // GD.Print($"[Bank] Paid {player.BankWage} guard wages to {player.DisplayName}");
+            DebugLogger.Instance.LogInfo("GOLD", $"BANK GUARD WAGE: {player.DisplayName} +{player.BankWage:N0}g wage (bank now {player.BankGold:N0})");
         }
 
         // Add interest on savings
@@ -1411,7 +1423,7 @@ public class BankLocation : BaseLocation
             {
                 player.Interest += interest;
                 player.BankGold += interest;
-                // GD.Print($"[Bank] Added {interest} interest to {player.DisplayName}'s account");
+                DebugLogger.Instance.LogInfo("GOLD", $"BANK INTEREST: {player.DisplayName} +{interest:N0}g interest (bank now {player.BankGold:N0})");
             }
         }
 
@@ -1420,7 +1432,7 @@ public class BankLocation : BaseLocation
         {
             long loanInterest = (long)(player.Loan * LoanInterestRate);
             player.Loan = SafeAddGold(player.Loan, loanInterest);
-            // GD.Print($"[Bank] Charged {loanInterest} loan interest to {player.DisplayName}");
+            DebugLogger.Instance.LogInfo("GOLD", $"LOAN INTEREST: {player.DisplayName} loan +{loanInterest:N0}g interest (loan now {player.Loan:N0})");
 
             // LOAN CONSEQUENCES - escalating based on debt level
             ProcessLoanConsequences(player);

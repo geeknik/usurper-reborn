@@ -9,7 +9,7 @@ using System.Collections.Generic;
 public static partial class GameConfig
 {
     // Version information
-    public const string Version = "0.50.3";
+    public const string Version = "0.50.4";
     public const string VersionName = "Open Doors";
     public const string DiscordInvite = "discord.gg/EZhwgDT6Ta";
 

@@ -170,10 +170,14 @@ public partial class QuestSystem
         // Update global statistics tracking
         StatisticsManager.Current.RecordQuestComplete();
 
+        // Fame from quest completion
+        player.Fame += 5;
+
         // Track bounty completion separately for achievements
         if (quest.Initiator == KING_BOUNTY_INITIATOR || quest.QuestTarget == QuestTarget.DefeatNPC)
         {
             StatisticsManager.Current.RecordBountyComplete();
+            player.Fame += 3; // Extra fame for royal bounties
         }
 
         // Faction standing boost for faction-initiated quests
@@ -672,6 +676,7 @@ public partial class QuestSystem
             case QuestRewardType.Money:
                 player.Gold += rewardAmount;
                 player.Statistics?.RecordQuestGoldReward(rewardAmount);
+                DebugLogger.Instance.LogInfo("GOLD", $"QUEST REWARD: {player.DisplayName} +{rewardAmount:N0}g from quest '{quest.Title}' (gold now {player.Gold:N0})");
                 terminal.WriteLine($"  Reward: {rewardAmount} gold!", "bright_yellow");
                 break;
 

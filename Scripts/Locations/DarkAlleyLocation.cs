@@ -27,6 +27,10 @@ namespace UsurperRemake.Locations
 
         public override async Task EnterLocation(Character player, TerminalEmulator term)
         {
+            // Set base class fields so methods called before base.EnterLocation() work
+            currentPlayer = player;
+            terminal = term;
+
             // Check if Dark Alley is accessible due to world events (e.g., Martial Law)
             var (accessible, reason) = WorldEventSystem.Instance.IsLocationAccessible("Dark Alley");
             if (!accessible)
@@ -773,6 +777,7 @@ namespace UsurperRemake.Locations
                 if (effects.HPDrain > 0) terminal.WriteLine($"  -{effects.HPDrain} HP/round drain");
 
                 currentPlayer.Darkness += 5; // Dark act
+                currentPlayer.Fame = Math.Max(0, currentPlayer.Fame - 3); // Infamy
 
                 // Increase Shadows standing for shady dealings
                 FactionSystem.Instance.ModifyReputation(Faction.TheShadows, 5);
@@ -821,6 +826,7 @@ namespace UsurperRemake.Locations
             currentPlayer.Strength += 5;
             currentPlayer.Stamina += 3;
             currentPlayer.Darkness += 3;
+            currentPlayer.Fame = Math.Max(0, currentPlayer.Fame - 2); // Infamy
             currentPlayer.SteroidShopPurchases++;
 
             terminal.WriteLine("Your muscles swell unnaturally!", "bright_green");
@@ -2397,6 +2403,7 @@ namespace UsurperRemake.Locations
                         currentPlayer.LoanDaysRemaining = 5;
                         currentPlayer.LoanInterestAccrued = 0;
                         currentPlayer.Gold += amount;
+                        DebugLogger.Instance.LogInfo("GOLD", $"DARK ALLEY LOAN: {currentPlayer.DisplayName} took {amount:N0}g loan (gold now {currentPlayer.Gold:N0})");
 
                         terminal.SetColor("bright_green");
                         terminal.WriteLine($"The loan shark counts out {amount:N0} gold.");

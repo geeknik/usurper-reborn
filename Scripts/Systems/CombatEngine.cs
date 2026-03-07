@@ -1060,6 +1060,12 @@ public partial class CombatEngine
             terminal.SetColor("yellow");
             terminal.WriteLine("You escaped from combat!");
 
+            // Fame loss for fleeing
+            if (result.Player.Fame > 0)
+            {
+                result.Player.Fame = Math.Max(0, result.Player.Fame - 1);
+            }
+
             // Broadcast flee to group followers
             BroadcastGroupCombatEvent(result,
                 $"\u001b[1;33m  ══ RETREAT ══\u001b[0m\n\u001b[33m  The party retreats from combat!\u001b[0m");
@@ -1608,7 +1614,7 @@ public partial class CombatEngine
     /// Compact dungeon combat action menu for BBS 80x25 terminals (multi-monster combat).
     /// Fits on 2-3 lines. Quickbar skills shown as "[1-9]Skills" shortcut.
     /// </summary>
-    private void ShowDungeonCombatMenuBBS(Character player, bool hasInjuredTeammates, bool canHealAlly, List<(string key, string name, bool available)> classInfo, bool isFollower = false)
+    private void ShowDungeonCombatMenuBBS(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo, bool isFollower = false)
     {
         // Row 1: Core actions
         terminal.SetColor("bright_yellow");
@@ -1633,7 +1639,7 @@ public partial class CombatEngine
         }
 
         // Heal ally
-        if (hasInjuredTeammates && canHealAlly)
+        if (hasTeammatesNeedingAid && canHealAlly)
         {
             terminal.SetColor("bright_yellow");
             terminal.Write("[H]");
@@ -2013,7 +2019,7 @@ public partial class CombatEngine
     /// <summary>
     /// Display dungeon combat menu in screen reader friendly format (no box-drawing characters)
     /// </summary>
-    private void ShowDungeonCombatMenuScreenReader(Character player, bool hasInjuredTeammates, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
+    private void ShowDungeonCombatMenuScreenReader(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
     {
         terminal.WriteLine("");
         terminal.WriteLine("Dungeon Combat Menu");
@@ -2035,13 +2041,13 @@ public partial class CombatEngine
         else
             terminal.WriteLine("  I - Use Item, No Potions");
 
-        // Heal Ally
-        if (hasInjuredTeammates)
+        // Aid Ally
+        if (hasTeammatesNeedingAid)
         {
             if (canHealAlly)
-                terminal.WriteLine("  H - Heal Ally");
+                terminal.WriteLine("  H - Aid Ally");
             else
-                terminal.WriteLine("  H - Heal Ally, No means to heal");
+                terminal.WriteLine("  H - Aid Ally, No means to aid");
         }
 
         // Quickbar slots
@@ -2088,7 +2094,7 @@ public partial class CombatEngine
     /// <summary>
     /// Display dungeon combat menu with box-drawing characters (standard visual mode)
     /// </summary>
-    private void ShowDungeonCombatMenuStandard(Character player, bool hasInjuredTeammates, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
+    private void ShowDungeonCombatMenuStandard(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
     {
         terminal.SetColor("green");
         terminal.WriteLine("╔═══════════════════════════════════════╗");
@@ -2138,8 +2144,8 @@ public partial class CombatEngine
             terminal.WriteLine("║");
         }
 
-        // Heal Ally option
-        if (hasInjuredTeammates)
+        // Aid Ally option
+        if (hasTeammatesNeedingAid)
         {
             if (canHealAlly)
             {
@@ -2147,7 +2153,7 @@ public partial class CombatEngine
                 terminal.SetColor("bright_yellow");
                 terminal.Write("[H] ");
                 terminal.SetColor("green");
-                terminal.Write($"{"Heal Ally",-34}");
+                terminal.Write($"{"Aid Ally",-34}");
                 terminal.WriteLine("║");
             }
             else
@@ -2156,7 +2162,7 @@ public partial class CombatEngine
                 terminal.SetColor("bright_yellow");
                 terminal.Write("[H] ");
                 terminal.SetColor("darkgray");
-                terminal.Write($"{"Heal Ally (No means to heal)",-34}");
+                terminal.Write($"{"Aid Ally (No means to aid)",-34}");
                 terminal.SetColor("green");
                 terminal.WriteLine("║");
             }
@@ -4733,6 +4739,12 @@ public partial class CombatEngine
             result.Outcome = CombatOutcome.PlayerEscaped;
             terminal.WriteLine("You have fled from combat.", "yellow");
 
+            // Fame loss for fleeing
+            if (result.Player.Fame > 0)
+            {
+                result.Player.Fame = Math.Max(0, result.Player.Fame - 1);
+            }
+
             // Track flee telemetry
             TelemetrySystem.Instance.TrackCombat(
                 "fled",
@@ -4954,6 +4966,7 @@ public partial class CombatEngine
 
         result.Player.Experience += playerXP;
         result.Player.Gold += goldReward;
+        DebugLogger.Instance.LogInfo("GOLD", $"COMBAT VICTORY: {result.Player.DisplayName} +{goldReward:N0}g from {result.Monster?.Name ?? "monster"} (gold now {result.Player.Gold:N0})");
         bool isFirstKill = result.Player.MKills == 0;
         result.Player.MKills++;
 
@@ -5009,6 +5022,18 @@ public partial class CombatEngine
                 _ = OnlineStateManager.Instance!.AddNews(
                     $"{bossKillerName} defeated the boss {result.Monster.Name}!", "combat");
             }
+        }
+
+        // Fame from combat victories
+        if (isBoss)
+        {
+            int fameGain = result.Monster.Level >= 25 ? 10 : 5;
+            result.Player.Fame += fameGain;
+            // Fame message shown below with other bonuses
+        }
+        else if (result.Monster.IsUnique)
+        {
+            result.Player.Fame += 2;
         }
 
         // Track gold collection for quests
@@ -8344,20 +8369,22 @@ public partial class CombatEngine
 
             // Show action menu (screen reader compatible or standard)
             bool hasInjuredTeammates = currentTeammates?.Any(t => t.IsAlive && t.HP < t.MaxHP) ?? false;
-            bool canHealAlly = hasInjuredTeammates && (player.Healing > 0 || (ClassAbilitySystem.IsSpellcaster(player.Class) && player.Mana > 0));
+            bool hasManaNeededTeammates = currentTeammates?.Any(t => t.IsAlive && t.MaxMana > 0 && t.Mana < t.MaxMana) ?? false;
+            bool hasTeammatesNeedingAid = hasInjuredTeammates || hasManaNeededTeammates;
+            bool canHealAlly = hasTeammatesNeedingAid && (player.Healing > 0 || player.ManaPotions > 0 || (ClassAbilitySystem.IsSpellcaster(player.Class) && player.Mana > 0));
             var classInfo = GetClassSpecificActions(player);
 
             if (DoorMode.IsInDoorMode || GameConfig.CompactMode)
             {
-                ShowDungeonCombatMenuBBS(player, hasInjuredTeammates, canHealAlly, classInfo);
+                ShowDungeonCombatMenuBBS(player, hasTeammatesNeedingAid, canHealAlly, classInfo);
             }
             else if (player.ScreenReaderMode)
             {
-                ShowDungeonCombatMenuScreenReader(player, hasInjuredTeammates, canHealAlly, classInfo);
+                ShowDungeonCombatMenuScreenReader(player, hasTeammatesNeedingAid, canHealAlly, classInfo);
             }
             else
             {
-                ShowDungeonCombatMenuStandard(player, hasInjuredTeammates, canHealAlly, classInfo);
+                ShowDungeonCombatMenuStandard(player, hasTeammatesNeedingAid, canHealAlly, classInfo);
             }
 
             // Show combat tip occasionally (skip in compact mode to save lines)
@@ -11535,7 +11562,7 @@ public partial class CombatEngine
     }
 
     /// <summary>
-    /// Handle player healing an ally - choose between potion or spell, then choose target
+    /// Handle player aiding an ally - choose between HP potion, mana potion, or heal spell, then choose target
     /// Returns the action to execute, or null if cancelled
     /// </summary>
     private async Task<CombatAction?> HandleHealAlly(Character player, List<Monster> monsters)
@@ -11546,30 +11573,40 @@ public partial class CombatEngine
             .ToList() ?? new List<Character>();
         if (livingTeammates.Count == 0)
         {
-            terminal.WriteLine("No allies available to heal.", "yellow");
+            terminal.WriteLine("No allies available to aid.", "yellow");
             await Task.Delay(GetCombatDelay(1000));
             return null;
         }
 
-        // Determine what healing options the player has
-        bool hasPotion = player.Healing > 0;
+        // Determine what aid options the player has
+        bool hasHealPotion = player.Healing > 0;
+        bool hasManaPotion = player.ManaPotions > 0;
         bool isSpellcaster = ClassAbilitySystem.IsSpellcaster(player.Class);
-        bool hasHealSpell = isSpellcaster && player.Mana > 0; // Will check for actual heal spells below
+        bool hasHealSpell = isSpellcaster && player.Mana > 0;
 
         terminal.WriteLine("");
         terminal.SetColor("bright_green");
-        terminal.WriteLine(GameConfig.ScreenReaderMode ? "HEAL ALLY:" : "═══ HEAL ALLY ═══");
+        terminal.WriteLine(GameConfig.ScreenReaderMode ? "AID ALLY:" : "═══ AID ALLY ═══");
         terminal.WriteLine("");
 
-        // Show healing options
+        // Show aid options
         terminal.SetColor("white");
         int option = 1;
         List<(int num, string type)> options = new();
 
-        if (hasPotion)
+        if (hasHealPotion)
         {
             terminal.WriteLine($"[{option}] Give healing potion(s) ({player.Healing} remaining)");
             options.Add((option, "potion"));
+            option++;
+        }
+
+        if (hasManaPotion)
+        {
+            terminal.SetColor("blue");
+            terminal.WriteLine($"[{option}] Give mana potion(s) ({player.ManaPotions} remaining)");
+            terminal.SetColor("white");
+            options.Add((option, "mana_potion"));
             option++;
         }
 
@@ -11585,7 +11622,7 @@ public partial class CombatEngine
         terminal.WriteLine("");
 
         terminal.SetColor("white");
-        terminal.Write("Choose healing method: ");
+        terminal.Write("Choose aid method: ");
         var methodInput = await terminal.GetInput("");
 
         if (!int.TryParse(methodInput, out int methodChoice) || methodChoice == 0)
@@ -11601,18 +11638,38 @@ public partial class CombatEngine
             return null;
         }
 
-        // Now select which ally to heal - show ALL teammates
+        // For mana potions, show MP status; for HP, show HP status
+        bool isManaAid = selectedOption.type == "mana_potion";
+
+        // Now select which ally to aid - show ALL teammates
         terminal.WriteLine("");
         terminal.SetColor("bright_cyan");
-        terminal.WriteLine("Select ally to heal:");
+        terminal.WriteLine(isManaAid ? "Select ally to restore mana:" : "Select ally to heal:");
         for (int i = 0; i < livingTeammates.Count; i++)
         {
             var ally = livingTeammates[i];
-            int hpPercent = ally.MaxHP > 0 ? (int)(100 * ally.HP / ally.MaxHP) : 100;
-            string hpColor = hpPercent < 25 ? "red" : hpPercent < 50 ? "yellow" : hpPercent < 100 ? "bright_green" : "green";
-            terminal.SetColor(hpColor);
-            string status = hpPercent >= 100 ? " (Full)" : "";
-            terminal.WriteLine($"  [{i + 1}] {ally.DisplayName} - HP: {ally.HP}/{ally.MaxHP} ({hpPercent}%){status}");
+            if (isManaAid)
+            {
+                if (ally.MaxMana <= 0)
+                {
+                    terminal.SetColor("darkgray");
+                    terminal.WriteLine($"  [{i + 1}] {ally.DisplayName} - No mana pool");
+                    continue;
+                }
+                int mpPercent = (int)(100 * ally.Mana / ally.MaxMana);
+                string mpColor = mpPercent < 25 ? "red" : mpPercent < 50 ? "yellow" : mpPercent < 100 ? "blue" : "cyan";
+                terminal.SetColor(mpColor);
+                string status = mpPercent >= 100 ? " (Full)" : "";
+                terminal.WriteLine($"  [{i + 1}] {ally.DisplayName} - MP: {ally.Mana}/{ally.MaxMana} ({mpPercent}%){status}");
+            }
+            else
+            {
+                int hpPercent = ally.MaxHP > 0 ? (int)(100 * ally.HP / ally.MaxHP) : 100;
+                string hpColor = hpPercent < 25 ? "red" : hpPercent < 50 ? "yellow" : hpPercent < 100 ? "bright_green" : "green";
+                terminal.SetColor(hpColor);
+                string status = hpPercent >= 100 ? " (Full)" : "";
+                terminal.WriteLine($"  [{i + 1}] {ally.DisplayName} - HP: {ally.HP}/{ally.MaxHP} ({hpPercent}%){status}");
+            }
         }
         terminal.SetColor("gray");
         terminal.WriteLine("  [0] Cancel");
@@ -11636,17 +11693,112 @@ public partial class CombatEngine
 
         var targetAlly = livingTeammates[targetChoice - 1];
 
-        // Check if target is already at full health
-        if (targetAlly.HP >= targetAlly.MaxHP)
+        // Execute the aid
+        if (selectedOption.type == "mana_potion")
         {
-            terminal.WriteLine($"{targetAlly.DisplayName} is already at full health!", "yellow");
-            await Task.Delay(GetCombatDelay(1000));
-            return null;
-        }
+            // Check if target has a mana pool
+            if (targetAlly.MaxMana <= 0)
+            {
+                terminal.WriteLine($"{targetAlly.DisplayName} doesn't use mana!", "yellow");
+                await Task.Delay(GetCombatDelay(1000));
+                return null;
+            }
 
-        // Execute the healing
-        if (selectedOption.type == "potion")
+            // Check if target is already at full mana
+            if (targetAlly.Mana >= targetAlly.MaxMana)
+            {
+                terminal.WriteLine($"{targetAlly.DisplayName} is already at full mana!", "yellow");
+                await Task.Delay(GetCombatDelay(1000));
+                return null;
+            }
+
+            // Calculate how much MP is missing
+            long missingMP = targetAlly.MaxMana - targetAlly.Mana;
+            int restorePerPotion = 20 + player.Level * 3 + 15; // Average mana per potion
+
+            int potionsNeeded = (int)Math.Ceiling((double)missingMP / restorePerPotion);
+            potionsNeeded = Math.Min(potionsNeeded, (int)player.ManaPotions);
+
+            terminal.WriteLine("");
+            terminal.SetColor("bright_cyan");
+            terminal.WriteLine($"{targetAlly.DisplayName} is missing {missingMP} MP.");
+            terminal.WriteLine($"Each potion restores approximately {restorePerPotion} MP.");
+            terminal.WriteLine("");
+            terminal.SetColor("white");
+            terminal.WriteLine($"[1] Use 1 potion");
+            if (potionsNeeded > 1)
+            {
+                terminal.WriteLine($"[F] Fully restore (uses up to {potionsNeeded} potions)");
+            }
+            terminal.SetColor("gray");
+            terminal.WriteLine("[0] Cancel");
+            terminal.WriteLine("");
+
+            terminal.SetColor("white");
+            terminal.Write("Choice: ");
+            var potionChoice = await terminal.GetInput("");
+
+            if (string.IsNullOrEmpty(potionChoice) || potionChoice.ToUpper() == "0")
+            {
+                return null;
+            }
+
+            int potionsToUse = 1;
+            if (potionChoice.ToUpper() == "F" && potionsNeeded > 1)
+            {
+                potionsToUse = potionsNeeded;
+            }
+            else if (potionChoice != "1")
+            {
+                terminal.WriteLine("Invalid choice.", "red");
+                await Task.Delay(GetCombatDelay(500));
+                return null;
+            }
+
+            // Apply mana potions
+            long totalRestore = 0;
+            long oldMana = targetAlly.Mana;
+
+            for (int i = 0; i < potionsToUse && targetAlly.Mana < targetAlly.MaxMana; i++)
+            {
+                player.ManaPotions--;
+                int restoreAmount = 20 + player.Level * 3 + random.Next(5, 25);
+                targetAlly.Mana = Math.Min(targetAlly.MaxMana, targetAlly.Mana + restoreAmount);
+            }
+
+            totalRestore = targetAlly.Mana - oldMana;
+
+            terminal.WriteLine("");
+            terminal.SetColor("bright_blue");
+            if (potionsToUse == 1)
+            {
+                terminal.WriteLine($"You give a mana potion to {targetAlly.DisplayName}!");
+            }
+            else
+            {
+                terminal.WriteLine($"You give {potionsToUse} mana potions to {targetAlly.DisplayName}!");
+            }
+            terminal.WriteLine($"{targetAlly.DisplayName} recovers {totalRestore} MP!", "blue");
+
+            if (targetAlly.Mana >= targetAlly.MaxMana)
+            {
+                terminal.WriteLine($"{targetAlly.DisplayName}'s mana is fully restored!", "bright_blue");
+            }
+
+            await Task.Delay(GetCombatDelay(1000));
+
+            return new CombatAction { Type = CombatActionType.HealAlly };
+        }
+        else if (selectedOption.type == "potion")
         {
+            // Check if target is already at full health
+            if (targetAlly.HP >= targetAlly.MaxHP)
+            {
+                terminal.WriteLine($"{targetAlly.DisplayName} is already at full health!", "yellow");
+                await Task.Delay(GetCombatDelay(1000));
+                return null;
+            }
+
             // Calculate how much HP is missing
             long missingHP = targetAlly.MaxHP - targetAlly.HP;
             int healPerPotion = 30 + player.Level * 5 + 20; // Average heal per potion
@@ -11737,6 +11889,14 @@ public partial class CombatEngine
         }
         else // spell
         {
+            // Check if target is already at full health
+            if (targetAlly.HP >= targetAlly.MaxHP)
+            {
+                terminal.WriteLine($"{targetAlly.DisplayName} is already at full health!", "yellow");
+                await Task.Delay(GetCombatDelay(1000));
+                return null;
+            }
+
             // Show heal spells and let player choose
             var healSpells = GetAvailableHealSpells(player);
             if (healSpells.Count == 0)
@@ -12106,7 +12266,36 @@ public partial class CombatEngine
             return await TeammateHealWithPotion(teammate, teammate, result);
         }
 
+        // Mana self-recovery: if teammate has mana potions and is below 30% mana, drink one
+        if (teammate.ManaPotions > 0 && teammate.MaxMana > 0 && teammate.Mana < teammate.MaxMana * 0.30)
+        {
+            return await TeammateUseManaPotion(teammate, result);
+        }
+
         return false;
+    }
+
+    /// <summary>
+    /// Teammate drinks a mana potion to restore their own mana
+    /// </summary>
+    private async Task<bool> TeammateUseManaPotion(Character teammate, CombatResult result)
+    {
+        if (teammate.ManaPotions <= 0 || teammate.Mana >= teammate.MaxMana)
+            return false;
+
+        teammate.ManaPotions--;
+        int restoreAmount = 20 + teammate.Level * 3 + random.Next(5, 25);
+        long oldMana = teammate.Mana;
+        teammate.Mana = Math.Min(teammate.MaxMana, teammate.Mana + restoreAmount);
+        long actualRestore = teammate.Mana - oldMana;
+
+        terminal.WriteLine("");
+        terminal.SetColor("bright_blue");
+        terminal.WriteLine($"{teammate.DisplayName} drinks a mana potion and recovers {actualRestore} MP!");
+        result.CombatLog.Add($"{teammate.DisplayName} uses a mana potion, restoring {actualRestore} MP.");
+
+        await Task.Delay(GetCombatDelay(800));
+        return true;
     }
 
     /// <summary>
@@ -13096,32 +13285,21 @@ public partial class CombatEngine
     /// </summary>
     private async Task HandleNpcTeammateDeath(Character npc, string killerName, CombatResult result)
     {
-        // Check if this NPC is protected (player team members get healed instead of killed)
         var npcId = npc.ID ?? "";
         var deathLocation = string.IsNullOrEmpty(result.Player?.CurrentLocation) ? "the dungeons" : result.Player.CurrentLocation;
         var worldNpc = UsurperRemake.Systems.NPCSpawnSystem.Instance?.ActiveNPCs?.FirstOrDefault(n => n.ID == npcId);
         if (worldNpc != null)
         {
+            // Temporarily clear team so MarkNPCDead doesn't trigger the world-sim
+            // player-team protection (that guard is for background NPC-vs-NPC violence,
+            // not real combat deaths)
+            var savedTeam = worldNpc.Team;
+            worldNpc.Team = "";
             bool wasPermadeath = WorldSimulator.Instance?.MarkNPCDead(worldNpc, GameConfig.PermadeathChancePlayerKill,
                 killerName, deathLocation) ?? false;
+            worldNpc.Team = savedTeam;
 
-            // If MarkNPCDead returned false AND the NPC was healed (player team protection),
-            // they survived — show a knockdown message instead of death
-            if (!wasPermadeath && worldNpc.IsAlive)
-            {
-                terminal.WriteLine("");
-                terminal.SetColor("yellow");
-                terminal.WriteLine($"  {npc.DisplayName} is knocked down but staggers back to their feet!");
-                terminal.WriteLine("");
-                await Task.Delay(1000);
-
-                // Sync combat reference HP with world NPC (they were healed by MarkNPCDead)
-                npc.HP = worldNpc.HP;
-                DebugLogger.Instance.LogInfo("NPC", $"NPC SURVIVED: {worldNpc.Name} (ID: {npcId}) — player team protection, healed to {worldNpc.HP} HP");
-                return; // Don't proceed with death handling
-            }
-
-            DebugLogger.Instance.LogInfo("NPC", $"NPC DIED: {worldNpc.Name} (ID: {npcId}) - marked as dead (permadeath={wasPermadeath})");
+            DebugLogger.Instance.LogInfo("NPC", $"NPC DIED IN COMBAT: {worldNpc.Name} (ID: {npcId}) - permadeath={wasPermadeath}");
         }
 
         terminal.WriteLine("");
@@ -13309,6 +13487,14 @@ public partial class CombatEngine
             if (isBoss)
             {
                 ArchetypeTracker.Instance.RecordBossDefeat(monster.Name, monster.Level);
+
+                // Fame from boss kills
+                int fameGain = monster.Level >= 25 ? 10 : 5;
+                result.Player.Fame += fameGain;
+            }
+            else if (monster.IsUnique)
+            {
+                result.Player.Fame += 2;
             }
         }
 
@@ -13412,6 +13598,7 @@ public partial class CombatEngine
         result.Player.Gold += adjustedGold;
         result.ExperienceGained = playerXPmm;
         result.GoldGained = adjustedGold;
+        DebugLogger.Instance.LogInfo("GOLD", $"COMBAT VICTORY (multi): {result.Player.DisplayName} +{adjustedGold:N0}g from {result.DefeatedMonsters.Count} monsters (gold now {result.Player.Gold:N0})");
 
         // Track peak gold
         result.Player.Statistics.RecordGoldChange(result.Player.Gold);
@@ -13814,6 +14001,13 @@ public partial class CombatEngine
         result.Player.HP = 0;
         result.Player.MDefeats++;
         result.CombatLog.Add($"Player killed by {result.Monster?.Name ?? "opponent"}");
+
+        // Fame loss on death
+        if (result.Player.Fame > 0)
+        {
+            int fameLoss = Math.Min(result.Player.Fame, 3);
+            result.Player.Fame -= fameLoss;
+        }
 
         // Log player death (use monster level as proxy for floor depth)
         DebugLogger.Instance.LogPlayerDeath(result.Player.Name, result.Monster?.Name ?? "unknown", result.Monster?.Level ?? 0);
@@ -17972,10 +18166,12 @@ public partial class CombatEngine
             // Show the full combat display — same as what the leader sees
             DisplayCombatStatus(monsters, teammate);
             bool hasInjuredTeammates = currentTeammates?.Any(t => t.IsAlive && t.HP < t.MaxHP) ?? false;
-            bool canHealAlly = hasInjuredTeammates && (teammate.Healing > 0 ||
+            bool hasManaNeededTeammates = currentTeammates?.Any(t => t.IsAlive && t.MaxMana > 0 && t.Mana < t.MaxMana) ?? false;
+            bool hasTeammatesNeedingAid = hasInjuredTeammates || hasManaNeededTeammates;
+            bool canHealAlly = hasTeammatesNeedingAid && (teammate.Healing > 0 || teammate.ManaPotions > 0 ||
                 (ClassAbilitySystem.IsSpellcaster(teammate.Class) && teammate.Mana > 0));
             var classInfo = GetClassSpecificActions(teammate);
-            ShowDungeonCombatMenuBBS(teammate, hasInjuredTeammates, canHealAlly, classInfo, isFollower: true);
+            ShowDungeonCombatMenuBBS(teammate, hasTeammatesNeedingAid, canHealAlly, classInfo, isFollower: true);
 
             // Show available spells so followers know their C# options
             if (ClassAbilitySystem.IsSpellcaster(teammate.Class) && teammate.Mana > 0)
@@ -18252,7 +18448,9 @@ public partial class CombatEngine
         if (trimmed == "H")
         {
             bool hasInjuredTeammates = currentTeammates?.Any(t => t.IsAlive && t.HP < t.MaxHP) ?? false;
-            bool canHealAlly = hasInjuredTeammates && (teammate.Healing > 0 ||
+            bool hasManaNeededTeammates = currentTeammates?.Any(t => t.IsAlive && t.MaxMana > 0 && t.Mana < t.MaxMana) ?? false;
+            bool hasTeammatesNeedingAid = hasInjuredTeammates || hasManaNeededTeammates;
+            bool canHealAlly = hasTeammatesNeedingAid && (teammate.Healing > 0 || teammate.ManaPotions > 0 ||
                 (ClassAbilitySystem.IsSpellcaster(teammate.Class) && teammate.Mana > 0));
             if (canHealAlly)
             {

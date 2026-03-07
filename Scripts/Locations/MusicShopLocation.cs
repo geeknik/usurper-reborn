@@ -193,16 +193,8 @@ public class MusicShopLocation : BaseLocation
         terminal.Write("B");
         terminal.SetColor("darkgray");
         terminal.Write("] ");
-        if (currentPlayer.Class == CharacterClass.Bard)
-        {
-            terminal.SetColor("white");
-            terminal.WriteLine("Buy Instruments");
-        }
-        else
-        {
-            terminal.SetColor("darkgray");
-            terminal.WriteLine("Buy Instruments (Bards only)");
-        }
+        terminal.SetColor("white");
+        terminal.WriteLine("Buy Instruments");
 
         // Hire a Performance
         terminal.SetColor("darkgray");
@@ -300,8 +292,7 @@ public class MusicShopLocation : BaseLocation
 
         terminal.SetColor("cyan");
         terminal.WriteLine("Services:");
-        bool isBard = currentPlayer.Class == CharacterClass.Bard;
-        WriteSRMenuOption("B", isBard ? "Buy Instruments" : "Buy Instruments (Bards only)", isBard);
+        WriteSRMenuOption("B", "Buy Instruments");
         WriteSRMenuOption("P", "Hire a Performance, combat buffs for 5 fights");
         if (state == MelodiaState.InShop)
             WriteSRMenuOption("T", "Talk to Melodia");
@@ -337,9 +328,8 @@ public class MusicShopLocation : BaseLocation
         ShowBBSNPCs();
         terminal.WriteLine("");
 
-        bool isBard = currentPlayer.Class == CharacterClass.Bard;
         ShowBBSMenuRow(
-            ("B", isBard ? "bright_yellow" : "darkgray", isBard ? "uy Instruments" : "uy Instr (Bard)"),
+            ("B", "bright_yellow", "uy Instruments"),
             ("P", "bright_yellow", "erformance"),
             ("L", "bright_yellow", "ore Songs"));
 
@@ -392,17 +382,6 @@ public class MusicShopLocation : BaseLocation
 
     private async Task BuyInstruments()
     {
-        if (currentPlayer.Class != CharacterClass.Bard)
-        {
-            terminal.SetColor("gray");
-            terminal.WriteLine("");
-            string shopkeep = GetMelodiaState() == MelodiaState.InShop ? "Melodia" : "Cadence";
-            terminal.WriteLine($"{shopkeep} shakes her head gently.");
-            terminal.SetColor("cyan");
-            terminal.WriteLine("\"These instruments require a bard's touch to truly sing. Perhaps a performance instead?\"");
-            await terminal.PressAnyKey();
-            return;
-        }
 
         var instruments = EquipmentDatabase.GetShopWeapons(WeaponHandedness.OneHanded)
             .Where(w => w.WeaponType == WeaponType.Instrument)
@@ -529,8 +508,6 @@ public class MusicShopLocation : BaseLocation
 
     private async Task BuyInstrumentByNumber(int itemNum)
     {
-        if (currentPlayer.Class != CharacterClass.Bard) return;
-
         var instruments = EquipmentDatabase.GetShopWeapons(WeaponHandedness.OneHanded)
             .Where(w => w.WeaponType == WeaponType.Instrument)
             .ToList();
@@ -581,22 +558,48 @@ public class MusicShopLocation : BaseLocation
         // Process city tax
         CityControlSystem.Instance.ProcessSaleTax(item.Value);
 
-        // Equip directly (instruments are one-handed, MainHand slot)
-        if (currentPlayer.EquipItem(item, null, out string message))
+        bool isBard = currentPlayer.Class == CharacterClass.Bard;
+
+        if (isBard)
         {
-            terminal.SetColor("bright_green");
-            terminal.WriteLine($"\nYou purchased and equipped {item.Name}!");
-            if (!string.IsNullOrEmpty(message))
+            // Bards can equip directly
+            if (currentPlayer.EquipItem(item, null, out string message))
             {
-                terminal.SetColor("gray");
-                terminal.WriteLine(message);
+                terminal.SetColor("bright_green");
+                terminal.WriteLine($"\nYou purchased and equipped {item.Name}!");
+                if (!string.IsNullOrEmpty(message))
+                {
+                    terminal.SetColor("gray");
+                    terminal.WriteLine(message);
+                }
+                currentPlayer.RecalculateStats();
             }
-            currentPlayer.RecalculateStats();
+            else
+            {
+                terminal.SetColor("yellow");
+                terminal.WriteLine($"\nYou purchased {item.Name}! (Added to inventory)");
+            }
         }
         else
         {
+            // Non-Bards can buy but not equip — goes to inventory
+            currentPlayer.Inventory.Add(new global::Item
+            {
+                Name = item.Name,
+                Type = ObjType.Weapon,
+                Value = item.Value,
+                Attack = item.WeaponPower,
+                Strength = item.StrengthBonus,
+                Dexterity = item.DexterityBonus,
+                HP = item.MaxHPBonus,
+                Mana = item.MaxManaBonus,
+                Defence = item.DefenceBonus,
+                MinLevel = item.MinLevel
+            });
             terminal.SetColor("yellow");
-            terminal.WriteLine($"\nYou purchased {item.Name}!");
+            terminal.WriteLine($"\nYou purchased {item.Name}! (Added to inventory)");
+            terminal.SetColor("gray");
+            terminal.WriteLine("Only Bards can wield instruments in combat.");
         }
 
         terminal.SetColor("cyan");

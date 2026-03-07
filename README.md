@@ -2,7 +2,7 @@
 
 ## A Persistent Online Text RPG with a Living World
 
-**ALPHA v0.49.3** | **FREE AND OPEN SOURCE** | **GPL v2**
+**ALPHA v0.50.4** | **FREE AND OPEN SOURCE** | **GPL v2**
 
 60+ autonomous NPCs wake up, go to work, visit taverns, fall in love, get married, have children, age, and eventually die of old age — all while you're offline. Log back in, read the news feed, and discover that the blacksmith married the barmaid, the king was assassinated, or a new generation just came of age. The world doesn't wait for you.
 
@@ -261,6 +261,12 @@ For detailed BBS setup instructions, see [DOCS/BBS_DOOR_SETUP.md](DOCS/BBS_DOOR_
 - Additional companion personal quest storylines
 - Expanded faction recruitment ceremonies
 
+### v0.50.4 - Mana Potions, Gold Audit & World Boss Fix
+Teammates can share mana potions in combat via [H] Aid Ally. Companions and NPC spellcasters auto-use mana potions at low MP. Comprehensive gold audit logging across all gold sources for exploit detection. World boss double-reward race condition fixed.
+
+### v0.50.0-v0.50.2 - Open Doors (Accessibility)
+Screen reader accessibility pass across 30+ files. `--screen-reader` CLI flag. Grief system visibility improvements. Companion/NPC stat display overhaul. Bug fixes: dungeon crash, dual god worship exploit, pit fighting gold farming, settlement deserialization.
+
 ### v0.49.3 - Player Experience: Onboarding, Power & Hooks
 First combat class tips, weaker floor 1 monsters, God Slayer buff (+20% damage/+10% defense after Old Gods), straggler encounters, next god breadcrumb, NPC story notifications, active buff display, wake-at-sleep-location, Reinforced Door home upgrade, quit menu overhaul, idle timeout warning. Bug fixes: AI Echo equipment/messages, splash screen clipping, `/tell` display names, news feed caps.
 
@@ -335,4 +341,4 @@ Join our Discord server for discussions, feedback, and updates:
 
 ---
 
-**Status**: ALPHA v0.49.3 — The world is running. [Watch it live.](https://usurper-reborn.net)
+**Status**: ALPHA v0.50.4 — The world is running. [Watch it live.](https://usurper-reborn.net)
