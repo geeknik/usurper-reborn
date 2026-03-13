@@ -456,7 +456,9 @@ public class MainStreetLocation : BaseLocation
             terminal.SetColor("darkgray"); terminal.Write("["); terminal.SetColor("bright_yellow"); terminal.Write("6"); terminal.SetColor("darkgray"); terminal.Write("]");
             terminal.SetColor("white"); terminal.Write(Loc.Get("main_street.menu_arena_short"));
             terminal.SetColor("darkgray"); terminal.Write("["); terminal.SetColor("bright_yellow"); terminal.Write("7"); terminal.SetColor("darkgray"); terminal.Write("]");
-            terminal.SetColor("white"); terminal.WriteLine(Loc.Get("main_street.menu_boss_short"));
+            terminal.SetColor("white"); terminal.Write(Loc.Get("main_street.menu_boss_short"));
+            terminal.SetColor("darkgray"); terminal.Write("["); terminal.SetColor("bright_yellow"); terminal.Write("R"); terminal.SetColor("darkgray"); terminal.Write("]");
+            terminal.SetColor("white"); terminal.WriteLine("Guilds");
         }
 
         // Blank line
@@ -796,7 +798,16 @@ public class MainStreetLocation : BaseLocation
             terminal.SetColor("darkgray");
             terminal.Write("]");
             terminal.SetColor("white");
-            terminal.WriteLine(Loc.Get("main_street.world_boss"));
+            terminal.Write(Loc.Get("main_street.world_boss"));
+
+            terminal.SetColor("darkgray");
+            terminal.Write("  [");
+            terminal.SetColor("bright_yellow");
+            terminal.Write("R");
+            terminal.SetColor("darkgray");
+            terminal.Write("]");
+            terminal.SetColor("white");
+            terminal.WriteLine("Guilds");
         }
 
         terminal.WriteLine("");
@@ -899,6 +910,7 @@ public class MainStreetLocation : BaseLocation
             terminal.WriteLine($"  5 - {Loc.Get("main_street.news_feed")}");
             terminal.WriteLine($"  6 - {Loc.Get("main_street.arena_pvp")}");
             terminal.WriteLine($"  7 - {Loc.Get("main_street.world_boss")}");
+            terminal.WriteLine($"  R - Guild Board");
             terminal.WriteLine($"  /say message - {Loc.Get("main_street.broadcast_chat")}");
             terminal.WriteLine($"  /tell player message - {Loc.Get("main_street.private_message")}");
             terminal.WriteLine($"  /who - {Loc.Get("main_street.see_online")}");
@@ -1108,6 +1120,17 @@ public class MainStreetLocation : BaseLocation
 
             case "!":
                 await BugReportSystem.ReportBug(terminal, currentPlayer);
+                return false;
+
+            case "R":
+                if (DoorMode.IsOnlineMode && GuildSystem.Instance != null)
+                {
+                    await ShowGuildBoard();
+                }
+                else
+                {
+                    terminal.WriteLine("  Guilds are only available in online mode.", "gray");
+                }
                 return false;
 
             case "3":
@@ -3326,5 +3349,116 @@ public class MainStreetLocation : BaseLocation
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Display the Guild Board — rankings, your guild status, and how to join/create.
+    /// Online mode only.
+    /// </summary>
+    private async Task ShowGuildBoard()
+    {
+        var guild = GuildSystem.Instance;
+        if (guild == null)
+        {
+            terminal.WriteLine("  Guilds are only available in online mode.", "yellow");
+            await terminal.PressAnyKey();
+            return;
+        }
+
+        terminal.WriteLine("");
+        if (!IsScreenReader)
+        {
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  ╔══════════════════════════════════════════════════╗");
+            terminal.WriteLine("  ║              GUILD BOARD                        ║");
+            terminal.WriteLine("  ╠══════════════════════════════════════════════════╣");
+        }
+        else
+        {
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  --- GUILD BOARD ---");
+        }
+
+        // Get all guilds
+        var allGuilds = guild.GetAllGuilds();
+
+        if (allGuilds.Count == 0)
+        {
+            terminal.SetColor("gray");
+            terminal.WriteLine("  No guilds have been founded yet.");
+            terminal.WriteLine("  Be the first! Use /gcreate <name> to start a guild (10,000 gold).");
+        }
+        else
+        {
+            // Guild rankings
+            terminal.SetColor("bright_cyan");
+            terminal.WriteLine($"  {"Rank",-5} {"Guild",-22} {"Members",-9} {"Leader",-16} {"Bank",8}");
+            terminal.SetColor("gray");
+            terminal.WriteLine("  " + new string('-', 62));
+
+            int rank = 1;
+            foreach (var g in allGuilds.Take(10))
+            {
+                // Check online members
+                var onlineMembers = guild.GetOnlineGuildMembers(g.DisplayName);
+                string memberStr = onlineMembers.Count > 0
+                    ? $"{g.MemberCount} ({onlineMembers.Count} on)"
+                    : $"{g.MemberCount}";
+
+                // Truncate names for display
+                string guildName = g.DisplayName.Length > 20 ? g.DisplayName[..20] + ".." : g.DisplayName;
+                string leaderDisplay = g.LeaderUsername.Length > 14 ? g.LeaderUsername[..14] + ".." : g.LeaderUsername;
+
+                // Color based on rank
+                string color = rank == 1 ? "bright_yellow" : rank <= 3 ? "bright_cyan" : "white";
+                terminal.SetColor(color);
+                terminal.WriteLine($"  {("#" + rank),-5} {guildName,-22} {memberStr,-9} {leaderDisplay,-16} {g.BankGold,8:N0}g");
+                rank++;
+            }
+
+            if (allGuilds.Count > 10)
+            {
+                terminal.SetColor("gray");
+                terminal.WriteLine($"  ... and {allGuilds.Count - 10} more guild{(allGuilds.Count - 10 != 1 ? "s" : "")}");
+            }
+        }
+
+        // Show player's guild status
+        terminal.WriteLine("");
+        string? playerGuild = guild.GetPlayerGuild(currentPlayer.Name1 ?? "");
+        if (playerGuild != null)
+        {
+            var info = guild.GetGuildInfo(playerGuild);
+            if (info != null)
+            {
+                terminal.SetColor("bright_green");
+                terminal.WriteLine($"  Your Guild: {info.DisplayName}");
+                terminal.SetColor("white");
+                double bonus = Math.Min(info.MemberCount * GuildSystem.GuildXPBonusPerMember, GuildSystem.MaxGuildXPBonus) * 100;
+                terminal.WriteLine($"  Members: {info.MemberCount}/{GuildSystem.MaxGuildMembers}  |  Bank: {info.BankGold:N0}g  |  XP Bonus: +{bonus:F0}%");
+                if (!string.IsNullOrEmpty(info.Motto))
+                {
+                    terminal.SetColor("gray");
+                    terminal.WriteLine($"  \"{info.Motto}\"");
+                }
+            }
+        }
+        else
+        {
+            terminal.SetColor("gray");
+            terminal.WriteLine("  You are not in a guild.");
+            terminal.SetColor("white");
+            terminal.WriteLine("  /gcreate <name> — Found a guild (10,000 gold)");
+            terminal.WriteLine("  Ask a guild leader for an invite with /tell");
+        }
+
+        if (!IsScreenReader)
+        {
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  ╚══════════════════════════════════════════════════╝");
+        }
+        terminal.WriteLine("");
+
+        await terminal.PressAnyKey();
     }
 }

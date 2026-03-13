@@ -780,6 +780,12 @@ namespace UsurperRemake.Systems
                 BossWeakened = activeCombatModifiers.BossWeakened,
             };
 
+            // Configure boss-specific party balance mechanics (v0.52.1)
+            ConfigureBossPartyMechanics(combatEngine.BossContext, boss.Type);
+
+            // Set divine armor reduction on the combat context so CombatEngine applies it
+            combatEngine.BossContext.DivineArmorReduction = GetDivineArmorReduction(boss.Type, player);
+
             // Set static flags for Manwe battle
             CombatEngine.IsManweBattle = boss.Type == OldGodType.Manwe;
             combatEngine.ResetManweBossFlags();
@@ -1152,24 +1158,126 @@ namespace UsurperRemake.Systems
         #region Helper Methods
 
         /// <summary>
+        /// Configure boss-specific party balance mechanics per Old God.
+        /// Earlier bosses (Maelketh, Veloura) have lighter mechanics to teach the player.
+        /// Later bosses (Noctura+) have full mechanics requiring balanced parties.
+        /// </summary>
+        private void ConfigureBossPartyMechanics(BossCombatContext ctx, OldGodType godType)
+        {
+            // All bosses get potion cooldown (teaches reliance on healers)
+            ctx.PotionCooldownRounds = GameConfig.BossPotionCooldownRounds;
+
+            switch (godType)
+            {
+                case OldGodType.Maelketh: // Floor 25 — Tutorial boss: enrage only
+                    ctx.EnrageRound = 30;
+                    break;
+
+                case OldGodType.Veloura: // Floor 40 — Introduces AoE (party damage spread)
+                    ctx.EnrageRound = 28;
+                    ctx.AoEFrequency = 5;
+                    ctx.AoEDamage = 150;
+                    ctx.AoEAbilityName = "Heartbreak Shatter";
+                    break;
+
+                case OldGodType.Thorgrim: // Floor 55 — Introduces channeling (needs interrupter)
+                    ctx.EnrageRound = 25;
+                    ctx.AoEFrequency = 4;
+                    ctx.AoEDamage = 250;
+                    ctx.AoEAbilityName = "Gavel of Judgment";
+                    ctx.ChannelFrequency = 6;
+                    ctx.ChannelAbilityName = "Final Verdict";
+                    ctx.ChannelDamage = 600;
+                    break;
+
+                case OldGodType.Noctura: // Floor 70 — Introduces corruption (needs healer cleanse)
+                    ctx.EnrageRound = 22;
+                    ctx.AoEFrequency = 4;
+                    ctx.AoEDamage = 350;
+                    ctx.AoEAbilityName = "Shadow Tempest";
+                    ctx.ChannelFrequency = 5;
+                    ctx.ChannelAbilityName = "Manifest Oblivion";
+                    ctx.ChannelDamage = 800;
+                    ctx.CorruptionDamagePerStack = 20;
+                    ctx.HasPhysicalImmunityPhase = true; // Phase 2: physical immunity
+                    break;
+
+                case OldGodType.Aurelion: // Floor 85 — Introduces doom (needs healer dispel)
+                    ctx.EnrageRound = 20;
+                    ctx.AoEFrequency = 3;
+                    ctx.AoEDamage = 450;
+                    ctx.AoEAbilityName = "Solar Cataclysm";
+                    ctx.ChannelFrequency = 5;
+                    ctx.ChannelAbilityName = "Purifying Annihilation";
+                    ctx.ChannelDamage = 1000;
+                    ctx.CorruptionDamagePerStack = 25;
+                    ctx.DoomRounds = 3;
+                    ctx.HasMagicalImmunityPhase = true; // Phase 2: magical immunity
+                    break;
+
+                case OldGodType.Terravok: // Floor 95 — Full mechanics, tighter timers
+                    ctx.EnrageRound = 18;
+                    ctx.AoEFrequency = 3;
+                    ctx.AoEDamage = 550;
+                    ctx.AoEAbilityName = "World Breaker";
+                    ctx.ChannelFrequency = 4;
+                    ctx.ChannelAbilityName = "Tectonic Annihilation";
+                    ctx.ChannelDamage = 1200;
+                    ctx.CorruptionDamagePerStack = 30;
+                    ctx.DoomRounds = 3;
+                    ctx.HasPhysicalImmunityPhase = true; // Phase 2: physical immunity
+                    break;
+
+                case OldGodType.Manwe: // Floor 100 — Everything at maximum, tightest timers
+                    ctx.EnrageRound = 15;
+                    ctx.AoEFrequency = 2;
+                    ctx.AoEDamage = 700;
+                    ctx.AoEAbilityName = "Creation's End";
+                    ctx.ChannelFrequency = 3;
+                    ctx.ChannelAbilityName = "Unmake Reality";
+                    ctx.ChannelDamage = 1500;
+                    ctx.CorruptionDamagePerStack = 40;
+                    ctx.DoomRounds = 2; // Only 2 rounds! Must dispel fast
+                    ctx.HasPhysicalImmunityPhase = true;
+                    ctx.HasMagicalImmunityPhase = true; // Both immunities across phases
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Calculate divine armor damage reduction for late-game Old Gods.
         /// Gods with divine armor resist unenchanted weapons.
-        /// Having ANY enchantment on the main-hand weapon removes the penalty.
+        /// Artifact weapons fully bypass; enchanted weapons partially bypass.
         /// </summary>
         private double GetDivineArmorReduction(OldGodType godType, Character player)
         {
-            // Check if weapon has any enchantments
-            var weapon = player.GetEquipment(EquipmentSlot.MainHand);
-            if (weapon != null && weapon.GetEnchantmentCount() > 0)
-                return 0; // Enchanted weapon — no penalty
-
-            return godType switch
+            double baseReduction = godType switch
             {
                 OldGodType.Aurelion => GameConfig.AurelionDivineShield,
                 OldGodType.Terravok => GameConfig.TerravokStoneSkin,
                 OldGodType.Manwe => GameConfig.ManweCreatorsWard,
                 _ => 0
             };
+            if (baseReduction <= 0) return 0;
+
+            // Check weapon for divine armor bypass
+            var weapon = player.GetEquipment(EquipmentSlot.MainHand);
+            if (weapon == null) return baseReduction;
+
+            // Artifact weapons (from Old God drops) fully bypass divine armor
+            // Must be currently equipped — collecting the artifact isn't enough
+            if (weapon.Name != null && (weapon.Name.Contains("Artifact") || weapon.Name.Contains("Godforged") ||
+                 weapon.Name.Contains("Sunforged") || weapon.Name.Contains("Voidtouched")))
+            {
+                return 0; // Full bypass
+            }
+
+            // Enchanted weapons only partially bypass divine armor (50% reduction instead of 100%)
+            if (weapon.GetEnchantmentCount() > 0)
+                return baseReduction * (1.0 - GameConfig.BossDivineArmorEnchantedBypass);
+
+            // No enchantments — full divine armor penalty
+            return baseReduction;
         }
 
         private string CenterText(string text, int width)

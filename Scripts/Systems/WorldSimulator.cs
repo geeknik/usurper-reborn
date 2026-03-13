@@ -904,8 +904,10 @@ public class WorldSimulator
     }
 
     /// <summary>
-    /// Process NPC immigration — for each playable race with fewer than 2 alive NPCs,
-    /// generate immigrant NPCs (1 male, 1 female) to prevent race extinction.
+    /// Process NPC immigration — generates immigrants to maintain race diversity.
+    /// Races below the extinction floor (2) always get immigrants.
+    /// Additionally, the most underrepresented race gets 1 immigrant per tick
+    /// to gradually rebalance toward equal distribution.
     /// Called once per world sim tick.
     /// </summary>
     private void ProcessNPCImmigration()
@@ -915,39 +917,68 @@ public class WorldSimulator
         // Calculate average level of alive NPCs for immigrant scaling
         int avgLevel = aliveNPCs.Count > 0 ? Math.Max(1, (int)aliveNPCs.Average(n => n.Level)) : 5;
 
-        // Check each playable race (0-9, the 10 base races)
-        foreach (CharacterRace race in Enum.GetValues(typeof(CharacterRace)))
+        // Count alive NPCs per race
+        int raceCount = 10; // 10 base playable races
+        var raceCounts = new Dictionary<CharacterRace, int>();
+        for (int i = 0; i < raceCount; i++)
+            raceCounts[(CharacterRace)i] = 0;
+        foreach (var npc in aliveNPCs)
         {
-            // Skip prestige-only races if any exist beyond base 10
-            if ((int)race > 9) continue;
+            if ((int)npc.Race < raceCount)
+                raceCounts[npc.Race]++;
+        }
 
-            int raceAlive = aliveNPCs.Count(n => n.Race == race);
-            if (raceAlive >= 2) continue;
+        int targetPerRace = Math.Max(5, aliveNPCs.Count / raceCount);
 
-            // This race needs immigrants
-            int needed = 2 - raceAlive;
+        // Phase 1: Extinction prevention — races below 2 get immediate immigrants
+        foreach (var kvp in raceCounts)
+        {
+            if (kvp.Value >= 2) continue;
+
+            int needed = 2 - kvp.Value;
             var sexes = new[] { CharacterSex.Male, CharacterSex.Female };
 
             for (int i = 0; i < needed && i < sexes.Length; i++)
             {
-                var immigrant = NPCSpawnSystem.Instance?.GenerateImmigrantNPC(race, sexes[i], avgLevel);
-                if (immigrant != null)
-                {
-                    NPCSpawnSystem.Instance?.AddRestoredNPC(immigrant);
-
-                    NewsSystem.Instance?.Newsy(
-                        $"A {race} traveler named {immigrant.Name2} has arrived in town.");
-
-                    UsurperRemake.Systems.DebugLogger.Instance.LogInfo("IMMIGRATION",
-                        $"Generated immigrant: {immigrant.Name2} ({race} {immigrant.Class} L{immigrant.Level} {sexes[i]})");
-                }
+                SpawnImmigrant(kvp.Key, sexes[i], avgLevel);
             }
+        }
 
-            if (needed > 0)
+        // Phase 2: Diversity balancing — spawn 1 immigrant for the most underrepresented race
+        // Only triggers if at least one race is below 60% of the target
+        int diversityThreshold = (targetPerRace * 3) / 5;
+        var mostNeeded = raceCounts
+            .Where(kv => kv.Value < diversityThreshold)
+            .OrderBy(kv => kv.Value)
+            .FirstOrDefault();
+
+        if (mostNeeded.Key != default || raceCounts.Values.Any(v => v == 0))
+        {
+            // Find the actual most underrepresented race (including those at 0)
+            var targetRace = raceCounts.OrderBy(kv => kv.Value).First();
+            if (targetRace.Value < diversityThreshold)
             {
-                UsurperRemake.Systems.DebugLogger.Instance.LogInfo("IMMIGRATION",
-                    $"Race {race}: {raceAlive} alive, generated {needed} immigrant(s)");
+                var sex = random.Next(2) == 0 ? CharacterSex.Male : CharacterSex.Female;
+                SpawnImmigrant(targetRace.Key, sex, avgLevel);
             }
+        }
+    }
+
+    /// <summary>
+    /// Spawn a single immigrant NPC of the given race and sex.
+    /// </summary>
+    private void SpawnImmigrant(CharacterRace race, CharacterSex sex, int avgLevel)
+    {
+        var immigrant = NPCSpawnSystem.Instance?.GenerateImmigrantNPC(race, sex, avgLevel);
+        if (immigrant != null)
+        {
+            NPCSpawnSystem.Instance?.AddRestoredNPC(immigrant);
+
+            NewsSystem.Instance?.Newsy(
+                $"A {race} traveler named {immigrant.Name2} has arrived in town.");
+
+            UsurperRemake.Systems.DebugLogger.Instance.LogInfo("IMMIGRATION",
+                $"Generated immigrant: {immigrant.Name2} ({race} {immigrant.Class} L{immigrant.Level} {sex})");
         }
     }
 

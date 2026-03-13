@@ -340,10 +340,12 @@ namespace UsurperRemake.Systems
             }
             else
             {
-                // Neutral children - random class
+                // Neutral children - any base class
                 candidates = new[] {
                     CharacterClass.Warrior, CharacterClass.Magician, CharacterClass.Assassin,
-                    CharacterClass.Ranger, CharacterClass.Bard, CharacterClass.Sage
+                    CharacterClass.Ranger, CharacterClass.Bard, CharacterClass.Sage,
+                    CharacterClass.Cleric, CharacterClass.Alchemist, CharacterClass.Jester,
+                    CharacterClass.Barbarian, CharacterClass.Paladin
                 };
             }
 

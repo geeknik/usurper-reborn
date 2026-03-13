@@ -3341,6 +3341,9 @@ updateNetwork = function() {
     allNpcs.forEach((n, i) => {
         const name = n.name || n.Name || '?';
         const dead = n.isDead || n.IsDead;
+        const perma = isPermaDead(n);
+        // Skip permadead NPCs — they clutter the graph with ghost nodes
+        if (perma) return;
         const fid = String(n.npcFaction !== undefined ? n.npcFaction : (n.NPCFaction !== undefined ? n.NPCFaction : -1));
         const lvl = n.level || n.Level || 1;
         const married = n.isMarried || n.IsMarried;
@@ -3350,8 +3353,7 @@ updateNetwork = function() {
         const race = RACE_NAMES_ARR[n.race !== undefined ? n.race : (n.Race !== undefined ? n.Race : -1)] || 'Unknown';
         const rels = n.relationships || n.Relationships || {};
         const relCount = Object.keys(rels).length;
-        const perma = isPermaDead(n);
-        nodes.push({ id: name, level: lvl, faction: fid, dead, perma, married, spouse, team, index: i, cls, race, relCount, isChild: false });
+        nodes.push({ id: name, level: lvl, faction: fid, dead, perma: false, married, spouse, team, index: i, cls, race, relCount, isChild: false });
         nodeMap[name] = nodes.length - 1;
     });
 
@@ -3391,6 +3393,7 @@ updateNetwork = function() {
     // Relationship links (ally/rival from impressions)
     const relAdded = new Set();
     allNpcs.forEach(n => {
+        if (isPermaDead(n)) return;
         const name = n.name || n.Name;
         const rels = n.relationships || n.Relationships;
         if (rels) {

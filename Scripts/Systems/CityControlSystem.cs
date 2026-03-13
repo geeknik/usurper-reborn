@@ -29,18 +29,20 @@ public class CityControlSystem
     /// <summary>
     /// Get the team currently controlling the city (CTurf = true)
     /// Checks both NPCs and the current player.
+    /// Filters out dead and imprisoned NPCs — they cannot hold city control.
     /// </summary>
     public string? GetControllingTeam()
     {
         // Check if the player controls the city
         var player = GameEngine.Instance?.CurrentPlayer;
-        if (player != null && player.CTurf && !string.IsNullOrEmpty(player.Team))
+        if (player != null && player.CTurf && !string.IsNullOrEmpty(player.Team) && player.HP > 0)
             return player.Team;
 
         var npcs = NPCSpawnSystem.Instance?.ActiveNPCs;
         if (npcs == null) return null;
 
-        var controller = npcs.FirstOrDefault(n => n.CTurf && !string.IsNullOrEmpty(n.Team));
+        var controller = npcs.FirstOrDefault(n => n.CTurf && !string.IsNullOrEmpty(n.Team)
+            && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0);
         return controller?.Team;
     }
 
@@ -54,7 +56,7 @@ public class CityControlSystem
         if (string.IsNullOrEmpty(controllingTeam)) return new List<NPC>();
 
         return NPCSpawnSystem.Instance?.ActiveNPCs?
-            .Where(n => n.Team == controllingTeam && n.IsAlive)
+            .Where(n => n.Team == controllingTeam && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0)
             .ToList() ?? new List<NPC>();
     }
 
@@ -211,18 +213,30 @@ public class CityControlSystem
 
         // Get challenger's team members
         var challengingTeam = NPCSpawnSystem.Instance?.ActiveNPCs?
-            .Where(n => n.Team == challengerTeam && n.IsAlive)
+            .Where(n => n.Team == challengerTeam && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0)
             .ToList() ?? new List<NPC>();
 
-        if (challengingTeam.Count == 0)
+        // Also include the player if they're on the challenging team
+        var player = GameEngine.Instance?.CurrentPlayer;
+        long challengerPlayerPower = 0;
+        if (player != null && player.Team == challengerTeam && player.HP > 0)
+            challengerPlayerPower = player.Level + player.Strength + player.Defence;
+
+        if (challengingTeam.Count == 0 && challengerPlayerPower == 0)
         {
-            // GD.Print("[CityControl] Challenge failed: No team members available");
             return false;
         }
 
-        // Calculate team power
-        long challengerPower = challengingTeam.Sum(m => m.Level + m.Strength + m.Defence);
+        // Calculate team power — include player on both sides
+        long challengerPower = challengingTeam.Sum(m => m.Level + m.Strength + m.Defence) + challengerPlayerPower;
         long defenderPower = currentControllers.Sum(m => m.Level + m.Strength + m.Defence);
+
+        // Include player in defender power if they're on the defending team
+        if (player != null && player.Team == controllingTeam && player.HP > 0)
+            defenderPower += player.Level + player.Strength + player.Defence;
+
+        // Defender bonus: 10% home turf advantage
+        defenderPower = (long)(defenderPower * 1.10);
 
         // Add randomness (+-20%)
         challengerPower += random.Next((int)(-challengerPower * 0.2), (int)(challengerPower * 0.2));
@@ -266,8 +280,8 @@ public class CityControlSystem
             player.CTurf = false;
         }
 
-        // Give control to new team
-        foreach (var npc in npcs.Where(n => n.Team == newControllingTeam && n.IsAlive))
+        // Give control to new team (only alive, non-dead, non-imprisoned members)
+        foreach (var npc in npcs.Where(n => n.Team == newControllingTeam && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0))
         {
             npc.CTurf = true;
             npc.TeamRec = 0;

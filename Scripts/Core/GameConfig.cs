@@ -9,7 +9,7 @@ using System.Collections.Generic;
 public static partial class GameConfig
 {
     // Version information
-    public const string Version = "0.52.0";
+    public const string Version = "0.52.1";
     public const string VersionName = "The Hook";
     public const string DiscordInvite = "discord.gg/EZhwgDT6Ta";
 
@@ -48,6 +48,21 @@ public static partial class GameConfig
     
     // Combat constants
     public const float CriticalHitMultiplier = 2.0f;  // Critical hit damage multiplier
+
+    // Boss fight party balance constants (v0.52.1)
+    public const int BossPotionCooldownRounds = 2;          // Rounds between potion uses in boss fights
+    public const double BossEnrageDamageMultiplier = 2.0;   // Damage multiplier when boss enrages
+    public const double BossEnrageDefenseMultiplier = 1.5;  // Defense multiplier when boss enrages
+    public const int BossEnrageExtraAttacks = 2;            // Extra attacks per round when enraged
+    public const int BossCorruptionDamageBase = 15;         // Base damage per corruption stack per round
+    public const int BossCorruptionMaxStacks = 10;          // Max corruption stacks
+    public const int BossDoomDefaultRounds = 3;             // Rounds before Doom kills target
+    public const double BossTankAoEAbsorption = 0.60;       // 60% of AoE absorbed by taunting tank
+    public const double BossPhaseImmunityResidual = 0.10;   // 10% damage still gets through immunity
+    public const int BossChannelInterruptSpeedThreshold = 80; // Agility needed to attempt interrupt
+    public const double BossChannelInterruptChance = 0.60;  // Base chance to interrupt a channel
+    public const double BossDivineArmorArtifactBypass = 1.0; // Artifact weapons fully bypass divine armor
+    public const double BossDivineArmorEnchantedBypass = 0.5; // Enchanted weapons bypass 50% of divine armor (not 100%)
     
     // Color constants for compatibility
     public const string HPColor = "`C";              // Bright red for HP display

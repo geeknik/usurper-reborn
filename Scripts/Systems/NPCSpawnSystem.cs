@@ -924,6 +924,125 @@ namespace UsurperRemake.Systems
         }
 
         /// <summary>
+        /// One-time rebalance pass: reassign NPCs from overrepresented classes to
+        /// underrepresented ones. Runs once on server startup (v0.52.1 migration).
+        /// </summary>
+        public void RebalanceClassDistribution()
+        {
+            var aliveNPCs = spawnedNPCs.Where(n => n.IsAlive && !n.IsDead && !n.IsPermaDead).ToList();
+            if (aliveNPCs.Count < 20) return; // Too few NPCs to rebalance
+
+            int classCount = 11;
+            int targetPerClass = aliveNPCs.Count / classCount;
+            int minThreshold = Math.Max(3, (targetPerClass * 2) / 3); // Classes below this get donors
+
+            // Count alive NPCs per class
+            var classCounts = new Dictionary<CharacterClass, int>();
+            for (int i = 0; i < classCount; i++)
+                classCounts[(CharacterClass)i] = 0;
+            foreach (var npc in aliveNPCs)
+            {
+                if ((int)npc.Class < classCount)
+                    classCounts[npc.Class]++;
+            }
+
+            // Identify underrepresented and overrepresented classes
+            // Prioritize healer classes (Cleric, Alchemist) first, then by lowest count
+            var healerClasses = new HashSet<CharacterClass> { CharacterClass.Cleric, CharacterClass.Alchemist };
+            var needMore = classCounts.Where(kv => kv.Value < minThreshold)
+                .OrderByDescending(kv => healerClasses.Contains(kv.Key) ? 1 : 0)
+                .ThenBy(kv => kv.Value).Select(kv => kv.Key).ToList();
+            var haveExcess = classCounts.Where(kv => kv.Value > targetPerClass + 2)
+                .OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToList();
+
+            if (needMore.Count == 0 || haveExcess.Count == 0)
+            {
+                DebugLogger.Instance.LogInfo("CLASS_REBALANCE",
+                    $"No rebalance needed. Distribution: {string.Join(", ", classCounts.Select(kv => $"{kv.Key}={kv.Value}"))}");
+                return;
+            }
+
+            DebugLogger.Instance.LogInfo("CLASS_REBALANCE",
+                $"Before rebalance: {string.Join(", ", classCounts.Select(kv => $"{kv.Key}={kv.Value}"))}");
+            DebugLogger.Instance.LogInfo("CLASS_REBALANCE",
+                $"Need more: {string.Join(", ", needMore)}. Have excess: {string.Join(", ", haveExcess)}");
+
+            int totalReassigned = 0;
+
+            foreach (var targetClass in needMore)
+            {
+                int needed = targetPerClass - classCounts[targetClass];
+                if (needed <= 0) continue;
+
+                // Build donor pool: non-special NPCs whose race allows the target class.
+                // Don't take from classes that are also underrepresented.
+                // Sort by most overrepresented class first so we drain bloated classes.
+                int donorFloor = Math.Max(minThreshold, classCounts[targetClass] + 2);
+                var donorPool = aliveNPCs
+                    .Where(n => n.Class != targetClass
+                        && classCounts[n.Class] > donorFloor
+                        && string.IsNullOrEmpty(n.Team)
+                        && !n.CTurf
+                        && n.DaysInPrison <= 0
+                        && !(GameConfig.InvalidCombinations.TryGetValue(n.Race, out var inv) && inv.Contains(targetClass)))
+                    .OrderByDescending(n => classCounts[n.Class])
+                    .ThenBy(_ => random.Next())
+                    .ToList();
+
+                foreach (var npc in donorPool)
+                {
+                    if (needed <= 0) break;
+                    // Don't drain donor class below the donor floor
+                    if (classCounts[npc.Class] <= donorFloor) continue;
+
+                    // Reassign class
+                    var oldClass = npc.Class;
+                    npc.Class = targetClass;
+
+                    // Recalculate HP for new class
+                    long baseHP = targetClass switch
+                    {
+                        CharacterClass.Warrior or CharacterClass.Barbarian => 80 + (npc.Level * 38),
+                        CharacterClass.Paladin or CharacterClass.Ranger => 70 + (npc.Level * 32),
+                        CharacterClass.Assassin or CharacterClass.Alchemist => 60 + (npc.Level * 28),
+                        CharacterClass.Cleric or CharacterClass.Bard => 55 + (npc.Level * 25),
+                        CharacterClass.Magician or CharacterClass.Sage => 45 + (npc.Level * 20),
+                        CharacterClass.Jester => 50 + (npc.Level * 22),
+                        _ => 60 + (npc.Level * 25)
+                    };
+                    npc.MaxHP = baseHP;
+                    npc.HP = baseHP;
+                    npc.BaseMaxHP = baseHP;
+
+                    // Recalculate mana for new class
+                    long baseMana = targetClass switch
+                    {
+                        CharacterClass.Magician or CharacterClass.Sage => 50 + (npc.Level * 25),
+                        CharacterClass.Cleric or CharacterClass.Paladin => 40 + (npc.Level * 20),
+                        _ => 0
+                    };
+                    npc.MaxMana = baseMana;
+                    npc.Mana = baseMana;
+                    npc.BaseMaxMana = baseMana;
+
+                    classCounts[oldClass]--;
+                    classCounts[targetClass]++;
+                    needed--;
+                    totalReassigned++;
+
+                    DebugLogger.Instance.LogInfo("CLASS_REBALANCE",
+                        $"Reassigned {npc.Name2} from {oldClass} to {targetClass} (Level {npc.Level}, {npc.Race})");
+                }
+            }
+
+            DebugLogger.Instance.LogInfo("CLASS_REBALANCE",
+                $"Rebalance complete: {totalReassigned} NPCs reassigned. After: {string.Join(", ", classCounts.Select(kv => $"{kv.Key}={kv.Value}"))}");
+
+            if (totalReassigned > 0)
+                _listVersion++;
+        }
+
+        /// <summary>
         /// Calculate experience points needed for a given level using same curve as players
         /// Formula: Sum of level^2.0 * 50 for each level from 2 to target
         /// </summary>
@@ -996,16 +1115,9 @@ namespace UsurperRemake.Systems
                     }
                 }
 
-                // Random class from the 11 base classes, respecting race restrictions
-                int classCount = 11; // Alchemist through Warrior
-                CharacterClass npcClass;
-                int attempts = 0;
-                do
-                {
-                    npcClass = (CharacterClass)random.Next(classCount);
-                    attempts++;
-                } while (attempts < 50 && GameConfig.InvalidCombinations.TryGetValue(race, out var invalid)
-                         && invalid.Contains(npcClass));
+                // Class selection weighted by current population — underrepresented classes
+                // get higher spawn chance to maintain diversity (especially healers)
+                CharacterClass npcClass = PickWeightedClass(race);
 
                 // Age 20-35
                 int age = 20 + random.Next(16);
@@ -1106,6 +1218,66 @@ namespace UsurperRemake.Systems
                     $"Failed to generate immigrant NPC ({race} {sex}): {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Pick a class weighted by inverse population count so underrepresented classes
+        /// (especially healers like Cleric/Alchemist) spawn more often.
+        /// Respects race/class restrictions.
+        /// </summary>
+        private CharacterClass PickWeightedClass(CharacterRace race)
+        {
+            int classCount = 11; // Alchemist(0) through Warrior(10)
+
+            // Count alive NPCs per class
+            var aliveNPCs = spawnedNPCs.Where(n => n.IsAlive && !n.IsDead && !n.IsPermaDead).ToList();
+            var classCounts = new int[classCount];
+            foreach (var npc in aliveNPCs)
+            {
+                int idx = (int)npc.Class;
+                if (idx >= 0 && idx < classCount)
+                    classCounts[idx]++;
+            }
+
+            // Get valid classes for this race
+            GameConfig.InvalidCombinations.TryGetValue(race, out var invalidClasses);
+
+            // Build weighted list: weight = max(1, targetPerClass - currentCount)
+            // Target is equal share of the population
+            int targetPerClass = Math.Max(3, aliveNPCs.Count / classCount);
+            var weights = new double[classCount];
+            double totalWeight = 0;
+
+            for (int i = 0; i < classCount; i++)
+            {
+                var cls = (CharacterClass)i;
+                if (invalidClasses != null && invalidClasses.Contains(cls))
+                {
+                    weights[i] = 0;
+                    continue;
+                }
+
+                // Classes below target get boosted weight, classes above get reduced weight
+                int deficit = targetPerClass - classCounts[i];
+                weights[i] = deficit > 0 ? 1.0 + (deficit * 0.5) : 0.3;
+                totalWeight += weights[i];
+            }
+
+            // Fallback: if no valid classes (shouldn't happen), pure random
+            if (totalWeight <= 0)
+                return (CharacterClass)random.Next(classCount);
+
+            // Weighted random selection
+            double roll = random.NextDouble() * totalWeight;
+            double cumulative = 0;
+            for (int i = 0; i < classCount; i++)
+            {
+                cumulative += weights[i];
+                if (roll < cumulative)
+                    return (CharacterClass)i;
+            }
+
+            return (CharacterClass)random.Next(classCount);
         }
 
         private static string ToRomanNumeral(int number)

@@ -2,7 +2,7 @@
 
 ## A Persistent Online Text RPG with a Living World
 
-**ALPHA v0.50.7** | **FREE AND OPEN SOURCE** | **GPL v2**
+**ALPHA v0.52.1** | **FREE AND OPEN SOURCE** | **GPL v2**
 
 60+ autonomous NPCs wake up, go to work, visit taverns, fall in love, get married, have children, age, and eventually die of old age — all while you're offline. Log back in, read the news feed, and discover that the blacksmith married the barmaid, the king was assassinated, or a new generation just came of age. The world doesn't wait for you.
 
@@ -261,20 +261,17 @@ For detailed BBS setup instructions, see [DOCS/BBS_DOOR_SETUP.md](DOCS/BBS_DOOR_
 - Additional companion personal quest storylines
 - Expanded faction recruitment ceremonies
 
-### v0.50.7 - Loot Variety, Prestige Fixes & Ally Combat Buffs
-Prestige classes bypass all equipment restrictions. Loot template expansion for all classes (6 new "All" weapons, 5 body armor, 20+ per-slot armor, 3 shields). Buff spells (Time Stop, protection) now apply to NPC allies in combat. God worship persistence fix for online mode. Font selection on main menu for WezTerm users. Prestige classes added to website.
+### v0.52.1 - Guild Board & Boss Fight Audit
+Guild Board on Main Street. Comprehensive city control system overhaul (12 fixes). End-game Old God boss fight party balance with 7 interlocking mechanics (enrage, AoE, channeling, corruption, doom, phase immunity, divine armor). 20+ bug fixes across combat, companions, NPCs, and equipment.
 
-### v0.50.6 - Gear Inspector & TLS Fixes
-New `/gear` (`/eq`) command shows detailed per-item equipment breakdown with all stats, enchantments, proc effects, and totals. Windows 7 TLS 1.2 fixes for auto-updater download, telemetry, and bug reports.
+### v0.52.0 - The Hook (Player Retention)
+Daily login streaks, boss kill/death summaries, opening guided quest, achievement broadcasts, weekly rankings/rivals, Blood Moon event, NG+ world modifiers, guild system, Floor 5 mini-boss, logout forecast.
 
-### v0.50.5 - Class Reworks & Equipment Stat Overhaul
-Alchemist (INT-scaling bombs, Potion Mastery +50% healing), Bard (songs buff entire party), Jester (CHA-scaling attacks, Trickster's Luck passive, 2 new early abilities), and Magician (Arcane Mastery +15% spell damage, spell cap removed, spellcasters can equip universal abilities) class reworks. Protection spell scaling fix: all 20 protection bonuses now scale with level and INT (Prismatic Shield ~200 AC at level 50 instead of 57). Equipment stat overhaul: Constitution/Intelligence replace raw HP/Mana. 267-template name-stat audit. NPC teammate level-up persistence fix. Dashboard race name fix.
+### v0.51.x - Localization & Balance
+Multi-language localization (English/Spanish, ~13,500 keys). Weapon thematic bonuses. Companion survivability buffs. Alchemist overhaul (10 new abilities). Ambush system. Dungeon party duplicate fix. Dungeon tutorial.
 
-### v0.50.4 - Mana Potions, Gold Audit & World Boss Fix
-Teammates can share mana potions in combat via [H] Aid Ally. Companions and NPC spellcasters auto-use mana potions at low MP. Comprehensive gold audit logging across all gold sources for exploit detection. World boss double-reward race condition fixed.
-
-### v0.50.0-v0.50.2 - Open Doors (Accessibility)
-Screen reader accessibility pass across 30+ files. `--screen-reader` CLI flag. Grief system visibility improvements. Companion/NPC stat display overhaul. Bug fixes: dungeon crash, dual god worship exploit, pit fighting gold farming, settlement deserialization.
+### v0.50.x - Accessibility & Balance
+Screen reader accessibility (30+ files, `--screen-reader` flag). Prestige equipment bypass. Loot template expansion. `/gear` command. Class reworks (Alchemist, Bard, Jester, Magician). Mana potions for teammates. Gold audit logging.
 
 ### v0.49.3 - Player Experience: Onboarding, Power & Hooks
 First combat class tips, weaker floor 1 monsters, God Slayer buff (+20% damage/+10% defense after Old Gods), straggler encounters, next god breadcrumb, NPC story notifications, active buff display, wake-at-sleep-location, Reinforced Door home upgrade, quit menu overhaul, idle timeout warning. Bug fixes: AI Echo equipment/messages, splash screen clipping, `/tell` display names, news feed caps.

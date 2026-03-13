@@ -6080,6 +6080,13 @@ public partial class GameEngine
         terminal.SetColor("bright_green");
         terminal.WriteLine("lunaticsunleashed.ddns.net:2333");
 
+        terminal.SetColor("bright_white");
+        terminal.Write("  A-Net Online                   ");
+        terminal.SetColor("gray");
+        terminal.Write("Synchronet  ");
+        terminal.SetColor("bright_green");
+        terminal.WriteLine("bbs.a-net.online:1337 / ssh -p 1338");
+
         // --- End BBS Entries ---
 
         terminal.WriteLine("");

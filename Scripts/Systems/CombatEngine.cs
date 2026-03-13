@@ -748,22 +748,28 @@ public partial class CombatEngine
                     int newPhase = BossContext.CheckPhase(bossMonster.HP, bossMonster.MaxHP);
                     if (newPhase > BossContext.CurrentPhase)
                     {
-                        await PlayBossPhaseTransition(BossContext, bossMonster, newPhase);
-                        BossContext.CurrentPhase = newPhase;
-                        // Broadcast boss phase transition to followers
-                        if (hasGroupEarly)
+                        // Iterate through each intermediate phase to ensure all mechanics trigger
+                        // (e.g., burst damage skipping from phase 1 to 3 must still trigger phase 2 immunity/minions)
+                        for (int phase = BossContext.CurrentPhase + 1; phase <= newPhase; phase++)
                         {
-                            int hpPctBoss = (int)(bossMonster.HP * 100 / Math.Max(1, bossMonster.MaxHP));
-                            BroadcastGroupCombatEvent(result,
-                                $"\u001b[1;35m  *** {bossMonster.Name} enters Phase {newPhase}! ({hpPctBoss}% HP) ***\u001b[0m");
-                        }
+                            await PlayBossPhaseTransition(BossContext, bossMonster, phase);
+                            BossContext.CurrentPhase = phase;
 
-                        // Maelketh spawns minions on phase 2
-                        if (BossContext.GodType == OldGodType.Maelketh && newPhase == 2)
-                        {
-                            var soldiers = CreateSpectralSoldiers(2, bossMonster.Level);
-                            monsters.AddRange(soldiers);
-                            result.Monsters.AddRange(soldiers);
+                            // Broadcast boss phase transition to followers
+                            if (hasGroupEarly)
+                            {
+                                int hpPctBoss = (int)(bossMonster.HP * 100 / Math.Max(1, bossMonster.MaxHP));
+                                BroadcastGroupCombatEvent(result,
+                                    $"\u001b[1;35m  *** {bossMonster.Name} enters Phase {phase}! ({hpPctBoss}% HP) ***\u001b[0m");
+                            }
+
+                            // Maelketh spawns minions on phase 2
+                            if (BossContext.GodType == OldGodType.Maelketh && phase == 2)
+                            {
+                                var soldiers = CreateSpectralSoldiers(2, bossMonster.Level);
+                                monsters.AddRange(soldiers);
+                                result.Monsters.AddRange(soldiers);
+                            }
                         }
                     }
 
@@ -781,6 +787,29 @@ public partial class CombatEngine
                         }
                     }
                 }
+
+                // Process boss party balance mechanics (enrage, AoE, corruption, doom, channel, immunity)
+                if (bossMonster != null)
+                    await ProcessBossRoundMechanics(bossMonster, player, result, roundNumber);
+            }
+
+            // Check if player died from boss mechanics (corruption/doom)
+            if (BossContext != null && !player.IsAlive)
+            {
+                terminal.SetColor("bright_red");
+                terminal.WriteLine(Loc.Get("combat.succumb_wounds"));
+                if (!anyGroupedAlive())
+                {
+                    BroadcastGroupCombatEvent(result,
+                        $"\u001b[1;31m  {player.DisplayName} has been consumed by dark powers!\u001b[0m");
+                    break;
+                }
+                if (!leaderDeathAnnounced)
+                {
+                    leaderDeathAnnounced = true;
+                    BroadcastGroupCombatEvent(result,
+                        $"\u001b[1;31m  {player.DisplayName} has fallen to dark powers! The party fights on!\u001b[0m");
+                }
             }
 
             // Check if group has real players (for output capture/broadcasting)
@@ -789,8 +818,8 @@ public partial class CombatEngine
             // Capture status effects for group broadcast
             if (hasGroup) terminal.StartCapture();
 
-            // Process status effects for player and display messages
-            var statusMessages = player.ProcessStatusEffects();
+            // Process status effects for player and display messages (skip if dead from boss mechanics)
+            var statusMessages = player.IsAlive ? player.ProcessStatusEffects() : new List<(string message, string color)>();
             if (statusMessages.Count > 0)
             {
                 terminal.SetColor("gray");
@@ -863,9 +892,19 @@ public partial class CombatEngine
             {
                 terminal.SetColor("bright_red");
                 terminal.WriteLine(Loc.Get("combat.succumb_wounds"));
-                BroadcastGroupCombatEvent(result,
-                    $"\u001b[1;31m  {player.DisplayName} has succumbed to status effects!\u001b[0m");
-                break;
+                if (!anyGroupedAlive())
+                {
+                    BroadcastGroupCombatEvent(result,
+                        $"\u001b[1;31m  {player.DisplayName} has succumbed to status effects!\u001b[0m");
+                    break;
+                }
+                // Leader died but grouped players carry on
+                if (!leaderDeathAnnounced)
+                {
+                    leaderDeathAnnounced = true;
+                    BroadcastGroupCombatEvent(result,
+                        $"\u001b[1;31m  {player.DisplayName} has fallen to status effects! The party fights on!\u001b[0m");
+                }
             }
 
             // === PLAYER (LEADER) TURN ===
@@ -1059,16 +1098,14 @@ public partial class CombatEngine
                     terminal.WriteLine("");
                     terminal.SetColor("red");
 
-                    // Show boss ability name for boss attacks
+                    // Show boss ability name for boss attacks (before target selection)
                     if (BossContext != null && monster.IsBoss)
                     {
                         string abilityName = SelectBossAbility(BossContext);
                         terminal.WriteLine(Loc.Get("combat.monster_uses_ability", monster.Name, abilityName));
                     }
-                    else
-                    {
-                        terminal.WriteLine(Loc.Get("combat.monster_attacks", monster.Name));
-                    }
+                    // "attacks you!" is now printed inside ProcessMonsterAction
+                    // after target selection, only when the monster actually targets the player
 
                     await ProcessMonsterAction(monster, player, result);
 
@@ -2847,6 +2884,21 @@ public partial class CombatEngine
 
         long actualDamage = Math.Max(1, attackPower - defense);
 
+        // Boss phase immunity check — physical attacks reduced during physical immunity
+        if (target is Monster immuneTarget && immuneTarget.IsPhysicalImmune)
+        {
+            actualDamage = ApplyPhaseImmunityDamage(immuneTarget, actualDamage, isMagicalDamage: false);
+            terminal.SetColor("dark_magenta");
+            terminal.WriteLine($"  {immuneTarget.Name}'s physical immunity absorbs most of the damage!");
+        }
+
+        // Divine armor reduction for Old God bosses (reduces player damage dealt)
+        if (BossContext != null && BossContext.DivineArmorReduction > 0 && actualDamage > 0)
+        {
+            actualDamage = (long)(actualDamage * (1.0 - BossContext.DivineArmorReduction));
+            actualDamage = Math.Max(1, actualDamage);
+        }
+
         if (defense > 0 && defense < attackPower)
         {
             terminal.SetColor("cyan");
@@ -2889,6 +2941,17 @@ public partial class CombatEngine
     /// </summary>
     private async Task ExecuteHeal(Character player, CombatResult result, bool quick)
     {
+        // Boss fight potion cooldown — prevents potion spam, forces healer dependency
+        if (BossContext != null && player.PotionCooldownRounds > 0)
+        {
+            terminal.SetColor("yellow");
+            terminal.WriteLine($"  Potions are still recharging! ({player.PotionCooldownRounds} rounds remaining)");
+            terminal.SetColor("gray");
+            terminal.WriteLine("  Your healer can still heal you!");
+            await Task.Delay(GetCombatDelay(1000));
+            return;
+        }
+
         bool hasHealing = player.Healing > 0 && player.HP < player.MaxHP;
         bool hasMana = player.ManaPotions > 0 && player.Mana < player.MaxMana;
 
@@ -2896,6 +2959,7 @@ public partial class CombatEngine
         if (hasMana && !quick)
         {
             await ExecuteUseItem(player, result);
+            // Cooldown is set inside ExecuteUseItem/ExecuteUseManaPotion
             return;
         }
 
@@ -2928,6 +2992,9 @@ public partial class CombatEngine
             if (player.Class == CharacterClass.Alchemist)
                 terminal.WriteLine(Loc.Get("combat.potion_mastery"), "bright_cyan");
             result.CombatLog.Add($"Player heals for {healAmount} HP");
+            // Apply potion cooldown in boss fights (+1 to offset start-of-round decrement)
+            if (BossContext != null)
+                player.PotionCooldownRounds = GameConfig.BossPotionCooldownRounds + 1;
         }
         else
         {
@@ -2970,6 +3037,9 @@ public partial class CombatEngine
             if (player.Class == CharacterClass.Alchemist)
                 terminal.WriteLine(Loc.Get("combat.potion_mastery"), "bright_cyan");
             result.CombatLog.Add($"Player heals for {totalHeal} HP using {potionsToUse} potions");
+            // Apply potion cooldown in boss fights (+1 to offset start-of-round decrement)
+            if (BossContext != null)
+                player.PotionCooldownRounds = GameConfig.BossPotionCooldownRounds + 1;
         }
 
         await Task.Delay(GetCombatDelay(1000));
@@ -3629,6 +3699,10 @@ public partial class CombatEngine
 
         // If leader is dead and no teammates, skip (shouldn't happen — loop should have exited)
         if (!player.IsAlive) return;
+
+        // Monster is targeting the player — show "attacks you!" message
+        terminal.SetColor("red");
+        terminal.WriteLine(Loc.Get("combat.monster_attacks", monster.Name));
 
         // === MONSTER SPECIAL ABILITIES ===
         // Chance for monster to use a special ability instead of normal attack
@@ -4847,6 +4921,7 @@ public partial class CombatEngine
             bool isOffHandAttack = teammate.IsDualWielding && s >= baseSwings;
 
             long attackPower = teammate.Strength + GetEffectiveWeapPow(teammate.WeapPow) + random.Next(1, 16);
+            attackPower += teammate.TempAttackBonus; // Apply buff abilities (Stimulant Brew, etc.)
             double damageModifier = GetWeaponConfigDamageModifier(teammate, isOffHandAttack);
             attackPower = (long)(attackPower * damageModifier);
 
@@ -7253,10 +7328,35 @@ public partial class CombatEngine
 
         bool isWeapon = lootItem.Type == global::ObjType.Weapon;
         bool isAccessory = lootItem.Type == global::ObjType.Neck || lootItem.Type == global::ObjType.Fingers;
-        int itemPower = isWeapon ? lootItem.Attack
-            : isAccessory ? (lootItem.Strength + lootItem.Dexterity + lootItem.Wisdom
-                           + lootItem.Charisma + lootItem.Agility + lootItem.HP + lootItem.Mana + lootItem.Armor + lootItem.Attack)
-            : lootItem.Armor;
+        int itemPower;
+        if (isWeapon)
+        {
+            itemPower = lootItem.Attack;
+        }
+        else if (isAccessory)
+        {
+            // Sum direct Item stats + LootEffects stat bonuses (CON, INT, AllStats are stored there)
+            itemPower = lootItem.Strength + lootItem.Dexterity + lootItem.Wisdom
+                      + lootItem.Charisma + lootItem.Agility + lootItem.HP + lootItem.Mana
+                      + lootItem.Armor + lootItem.Attack + lootItem.Defence;
+            if (lootItem.LootEffects != null)
+            {
+                foreach (var (effectType, value) in lootItem.LootEffects)
+                {
+                    var effect = (LootGenerator.SpecialEffect)effectType;
+                    if (effect == LootGenerator.SpecialEffect.Constitution ||
+                        effect == LootGenerator.SpecialEffect.Intelligence ||
+                        effect == LootGenerator.SpecialEffect.AllStats)
+                    {
+                        itemPower += value;
+                    }
+                }
+            }
+        }
+        else
+        {
+            itemPower = lootItem.Armor;
+        }
 
         Character? bestCandidate = null;
         int bestUpgradePercent = 0;
@@ -8590,6 +8690,7 @@ public partial class CombatEngine
 
             // Track damage dealt statistics
             result.Player?.Statistics.RecordDamageDealt(actualDamage, false);
+            result.TotalDamageDealt += actualDamage;
 
             terminal.SetColor("yellow");
             terminal.Write($"{monster.Name}: ");
@@ -8632,6 +8733,21 @@ public partial class CombatEngine
     private async Task ApplySingleMonsterDamage(Monster target, long damage, CombatResult result, string damageSource = "attack", Character? attacker = null)
     {
         if (target == null || !target.IsAlive) return;
+
+        // Boss phase immunity check — magical spells reduced during magical immunity
+        if (target.IsMagicalImmune)
+        {
+            damage = ApplyPhaseImmunityDamage(target, damage, isMagicalDamage: true);
+            terminal.SetColor("dark_magenta");
+            terminal.WriteLine($"  {target.Name}'s magical immunity absorbs most of the spell damage!");
+        }
+
+        // Divine armor reduction for Old God bosses (reduces player damage dealt)
+        if (BossContext != null && BossContext.DivineArmorReduction > 0 && damage > 0)
+        {
+            damage = (long)(damage * (1.0 - BossContext.DivineArmorReduction));
+            damage = Math.Max(1, damage);
+        }
 
         // Armor piercing enchantment reduces effective monster armor
         long effectiveArmor = target.ArmPow;
@@ -12767,6 +12883,19 @@ public partial class CombatEngine
             allPartyMembers.AddRange(currentTeammates.Where(t => t.IsAlive));
         }
 
+        // === BOSS PARTY MECHANICS: Priority actions before normal AI ===
+        if (BossContext != null && teammate.IsAlive)
+        {
+            // Priority 1: Healer classes try to dispel Doom or cleanse Corruption
+            if (IsHealerClass(teammate) && TryHealerCleanse(teammate, currentPlayer, result))
+                return;
+
+            // Priority 2: Fast characters try to interrupt boss channeling
+            var channeling = monsters.FirstOrDefault(m => m.IsChanneling && m.IsAlive);
+            if (channeling != null && TryInterruptBossChannel(channeling, teammate))
+                return;
+        }
+
         // Check if teammate should heal instead of attack
         var healAction = await TryTeammateHealAction(teammate, allPartyMembers, result);
         if (healAction)
@@ -12815,6 +12944,7 @@ public partial class CombatEngine
 
                 // Calculate teammate attack damage (with weapon soft cap)
                 long attackPower = teammate.Strength + GetEffectiveWeapPow(teammate.WeapPow) + random.Next(1, 16);
+                attackPower += teammate.TempAttackBonus; // Apply buff abilities (Stimulant Brew, etc.)
 
                 // Apply weapon configuration damage modifier (includes alignment bonuses, off-hand penalty)
                 double damageModifier = GetWeaponConfigDamageModifier(teammate, isOffHandAttack);
@@ -15472,6 +15602,16 @@ public partial class CombatEngine
     /// </summary>
     private async Task ExecuteUseItem(Character player, CombatResult result)
     {
+        // Boss fight potion cooldown check
+        if (BossContext != null && player.PotionCooldownRounds > 0)
+        {
+            terminal.SetColor("yellow");
+            terminal.WriteLine($"  Potions are on cooldown! ({player.PotionCooldownRounds} round{(player.PotionCooldownRounds > 1 ? "s" : "")} remaining)");
+            terminal.WriteLine("  Rely on your healer to sustain the party!", "gray");
+            await Task.Delay(GetCombatDelay(1000));
+            return;
+        }
+
         bool hasHealing = player.Healing > 0 && player.HP < player.MaxHP;
         bool hasMana = player.ManaPotions > 0 && player.Mana < player.MaxMana;
 
@@ -15528,6 +15668,11 @@ public partial class CombatEngine
         terminal.WriteLine($"You drink {potionsNeeded} healing potion{(potionsNeeded > 1 ? "s" : "")} and recover {actualHealing} HP!", "green");
         terminal.WriteLine($"Potions remaining: {player.Healing}/{player.MaxPotions}", "cyan");
         result.CombatLog.Add($"Player used {potionsNeeded} healing potion(s) for {actualHealing} HP");
+
+        // Boss fight potion cooldown
+        if (BossContext != null)
+            player.PotionCooldownRounds = GameConfig.BossPotionCooldownRounds + 1; // +1 to offset start-of-round decrement
+
         await Task.Delay(GetCombatDelay(1500));
     }
 
@@ -15555,6 +15700,11 @@ public partial class CombatEngine
         terminal.WriteLine($"You drink a mana potion and recover {actualRestore} MP!", "blue");
         terminal.WriteLine($"Mana potions remaining: {player.ManaPotions}/{player.MaxManaPotions}", "cyan");
         result.CombatLog.Add($"Player used mana potion for {actualRestore} MP");
+
+        // Boss fight potion cooldown
+        if (BossContext != null)
+            player.PotionCooldownRounds = GameConfig.BossPotionCooldownRounds + 1;
+
         await Task.Delay(GetCombatDelay(1500));
     }
     
@@ -15573,7 +15723,7 @@ public partial class CombatEngine
         }
 
         // Delegate to the existing spell-handling UI/logic
-        ProcessSpellCasting(player, monster);
+        ProcessSpellCasting(player, monster, result);
 
         // Mark that the player used their casting action this turn so other systems (AI, etc.)
         // can react accordingly.
@@ -16484,6 +16634,26 @@ public partial class CombatEngine
             }
         }
 
+        // Decrement teammate temporary buff durations
+        if (currentTeammates != null)
+        {
+            foreach (var tm in currentTeammates.Where(t => t.IsAlive))
+            {
+                if (tm.TempAttackBonusDuration > 0)
+                {
+                    tm.TempAttackBonusDuration--;
+                    if (tm.TempAttackBonusDuration <= 0)
+                        tm.TempAttackBonus = 0;
+                }
+                if (tm.TempDefenseBonusDuration > 0)
+                {
+                    tm.TempDefenseBonusDuration--;
+                    if (tm.TempDefenseBonusDuration <= 0)
+                        tm.TempDefenseBonus = 0;
+                }
+            }
+        }
+
         // Tick down status immunity duration
         if (player.HasStatusImmunity)
         {
@@ -17296,7 +17466,7 @@ public partial class CombatEngine
     /// <summary>
     /// Process spell casting during combat
     /// </summary>
-    private void ProcessSpellCasting(Character player, Monster monster)
+    private void ProcessSpellCasting(Character player, Monster monster, CombatResult result = null)
     {
         terminal.ClearScreen();
         terminal.SetColor("white");
@@ -17359,7 +17529,7 @@ public partial class CombatEngine
             terminal.WriteLine(spellResult.Message);
 
             // Apply spell effects
-            ApplySpellEffects(player, monster, spellResult);
+            ApplySpellEffects(player, monster, spellResult, result);
 
             // Display training improvement message if spell proficiency increased
             if (spellResult.SkillImproved && !string.IsNullOrEmpty(spellResult.NewProficiencyLevel))
@@ -17380,7 +17550,7 @@ public partial class CombatEngine
     /// <summary>
     /// Apply spell effects to combat
     /// </summary>
-    private void ApplySpellEffects(Character caster, Monster target, SpellSystem.SpellResult spellResult)
+    private void ApplySpellEffects(Character caster, Monster target, SpellSystem.SpellResult spellResult, CombatResult result = null)
     {
         // Apply healing to caster
         if (spellResult.Healing > 0)
@@ -17390,12 +17560,19 @@ public partial class CombatEngine
             long actualHealing = caster.HP - oldHP;
             terminal.WriteLine($"{caster.DisplayName} heals {actualHealing} hitpoints!", "green");
         }
-        
+
         // Apply damage to target
         if (spellResult.Damage > 0 && target != null)
         {
             target.HP = Math.Max(0, target.HP - spellResult.Damage);
             terminal.WriteLine($"{target.Name} takes {spellResult.Damage} damage!", "red");
+
+            // Track spell damage dealt for boss kill summary / telemetry
+            if (result != null)
+            {
+                result.TotalDamageDealt += spellResult.Damage;
+                result.Player?.Statistics.RecordDamageDealt(spellResult.Damage, false);
+            }
 
             if (target.HP <= 0)
             {
@@ -18416,8 +18593,9 @@ public partial class CombatEngine
         int attacks = 1;
 
         // No weapon equipped — only 1 basic attack (no bonus swings/procs)
+        // Mercenaries (royal bodyguards) use WeapPow directly without EquippedItems
         bool hasWeapon = attacker.EquippedItems.TryGetValue(EquipmentSlot.MainHand, out var mainHandId) && mainHandId > 0;
-        if (!hasWeapon)
+        if (!hasWeapon && !(attacker.IsMercenary && attacker.WeapPow > 0))
             return 1;
 
         // Warrior extra swings
@@ -19116,6 +19294,19 @@ public partial class CombatEngine
                 boss.SpecialAbilities = phaseAbilities;
         }
 
+        // Apply phase immunity on phase transitions for bosses that have it
+        if (ctx != null)
+        {
+            if (newPhase == 2 && ctx.HasPhysicalImmunityPhase)
+                ApplyPhaseImmunity(boss, physical: true, rounds: 4);
+            else if (newPhase == 2 && ctx.HasMagicalImmunityPhase)
+                ApplyPhaseImmunity(boss, physical: false, rounds: 4);
+
+            // Phase 3: bosses with BOTH immunities get the other type
+            if (newPhase == 3 && ctx.HasPhysicalImmunityPhase && ctx.HasMagicalImmunityPhase)
+                ApplyPhaseImmunity(boss, physical: false, rounds: 4);
+        }
+
         terminal.WriteLine("");
         await Task.Delay(1500);
     }
@@ -19152,6 +19343,515 @@ public partial class CombatEngine
         terminal.SetColor("bright_red");
         terminal.WriteLine($"  {count} Spectral Soldiers materialize from the shadows!");
         return soldiers;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // BOSS PARTY BALANCE MECHANICS (v0.52.1)
+    // These mechanics enforce the need for a balanced party in end-game
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Check and apply boss enrage at the configured round threshold.
+    /// Enrage doubles damage, increases defense, and adds extra attacks.
+    /// </summary>
+    private void CheckBossEnrage(BossCombatContext ctx, Monster bossMonster, int roundNumber)
+    {
+        if (ctx.IsEnraged || ctx.EnrageRound <= 0) return;
+
+        // Warning at 50% and 75% of enrage timer
+        int warningRound50 = (int)(ctx.EnrageRound * 0.50);
+        int warningRound75 = (int)(ctx.EnrageRound * 0.75);
+        if (roundNumber == warningRound50)
+        {
+            terminal.SetColor("yellow");
+            terminal.WriteLine($"  {bossMonster.Name} grows impatient... {ctx.EnrageRound - roundNumber} rounds until enrage!");
+        }
+        else if (roundNumber == warningRound75)
+        {
+            terminal.SetColor("bright_red");
+            terminal.WriteLine($"  {bossMonster.Name}'s power builds... the air crackles with fury!");
+            terminal.WriteLine($"  *** ENRAGE in {ctx.EnrageRound - roundNumber} rounds! ***");
+        }
+
+        if (roundNumber >= ctx.EnrageRound)
+        {
+            ctx.IsEnraged = true;
+            bossMonster.IsEnraged = true;
+            bossMonster.Strength = (long)(bossMonster.Strength * GameConfig.BossEnrageDamageMultiplier);
+            bossMonster.Defence = (int)(bossMonster.Defence * GameConfig.BossEnrageDefenseMultiplier);
+            ctx.AttacksPerRound += GameConfig.BossEnrageExtraAttacks;
+
+            terminal.WriteLine("");
+            terminal.SetColor("bright_red");
+            if (GameConfig.ScreenReaderMode)
+            {
+                terminal.WriteLine($"  {bossMonster.Name} HAS ENRAGED! Damage doubled! Defense increased!");
+            }
+            else
+            {
+                terminal.WriteLine("  ╔═══════════════════════════════════════════════╗");
+                terminal.WriteLine($"  ║   {bossMonster.Name} HAS ENRAGED!".PadRight(49) + "║");
+                terminal.WriteLine("  ║   Damage doubled! Defense increased!          ║");
+                terminal.WriteLine("  ╚═══════════════════════════════════════════════╝");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Process corruption stacks on a character — deals stacking damage each round.
+    /// Only healer-class teammates can cleanse corruption.
+    /// </summary>
+    private void ProcessCorruptionTick(Character target, CombatResult result)
+    {
+        if (target.CorruptionStacks <= 0 || !target.IsAlive) return;
+
+        int damagePerStack = BossContext?.CorruptionDamagePerStack ?? GameConfig.BossCorruptionDamageBase;
+        long corruptionDamage = target.CorruptionStacks * damagePerStack;
+        target.HP = Math.Max(0, target.HP - corruptionDamage);
+
+        terminal.SetColor("dark_magenta");
+        terminal.WriteLine($"  Corruption burns {target.DisplayName} for {corruptionDamage} damage! ({target.CorruptionStacks} stacks)");
+
+        if (!target.IsAlive)
+        {
+            terminal.SetColor("bright_red");
+            terminal.WriteLine($"  {target.DisplayName} has been consumed by corruption!");
+        }
+    }
+
+    /// <summary>
+    /// Apply corruption stacks to a target. Called by boss abilities.
+    /// </summary>
+    private void ApplyCorruptionStacks(Character target, int stacks)
+    {
+        if (target == null || !target.IsAlive) return;
+        target.CorruptionStacks = Math.Min(target.CorruptionStacks + stacks, GameConfig.BossCorruptionMaxStacks);
+        terminal.SetColor("dark_magenta");
+        terminal.WriteLine($"  {target.DisplayName} gains {stacks} corruption! (Total: {target.CorruptionStacks})");
+    }
+
+    /// <summary>
+    /// Process Doom countdown — if it reaches 0, the target is killed instantly.
+    /// Only healer-class teammates can dispel Doom.
+    /// </summary>
+    private void ProcessDoomTick(Character target, CombatResult result)
+    {
+        if (target.DoomCountdown <= 0 || !target.IsAlive) return;
+
+        target.DoomCountdown--;
+        if (target.DoomCountdown <= 0)
+        {
+            terminal.SetColor("bright_red");
+            terminal.WriteLine($"  *** DOOM claims {target.DisplayName}! ***");
+            target.HP = 0;
+        }
+        else
+        {
+            terminal.SetColor("red");
+            terminal.WriteLine($"  Doom ticks on {target.DisplayName}... {target.DoomCountdown} rounds remaining!");
+        }
+    }
+
+    /// <summary>
+    /// Apply Doom to a target. Boss ability that creates a ticking death timer.
+    /// </summary>
+    private void ApplyDoom(Character target, int rounds)
+    {
+        if (target == null || !target.IsAlive) return;
+        if (target.DoomCountdown > 0) return; // Can't stack doom
+
+        target.DoomCountdown = rounds;
+        terminal.SetColor("bright_red");
+        terminal.WriteLine($"  *** {target.DisplayName} has been marked with DOOM! ({rounds} rounds) ***");
+        terminal.SetColor("yellow");
+        terminal.WriteLine("  A healer must dispel this or they will die!");
+    }
+
+    /// <summary>
+    /// Boss begins channeling a devastating ability. Party has N rounds to interrupt it.
+    /// High-speed characters (Assassin, Ranger) or specific abilities can interrupt.
+    /// </summary>
+    private void StartBossChannel(Monster boss, BossCombatContext ctx)
+    {
+        if (boss.IsChanneling) return;
+
+        boss.IsChanneling = true;
+        boss.ChannelingRoundsLeft = 2;
+        boss.ChannelingAbilityName = ctx.ChannelAbilityName;
+
+        terminal.SetColor("bright_magenta");
+        terminal.WriteLine($"  {boss.Name} begins channeling {ctx.ChannelAbilityName}!");
+        terminal.SetColor("yellow");
+        terminal.WriteLine("  *** Interrupt the channel or face devastating damage! ***");
+        terminal.WriteLine("  (Fast characters with high Agility can interrupt)");
+    }
+
+    /// <summary>
+    /// Process boss channeling each round. If channel completes, deal massive AoE damage.
+    /// </summary>
+    private void ProcessBossChannel(Monster boss, Character player, CombatResult result)
+    {
+        if (!boss.IsChanneling || !boss.IsAlive) return;
+
+        boss.ChannelingRoundsLeft--;
+        if (boss.ChannelingRoundsLeft <= 0)
+        {
+            // Channel complete — devastating party-wide damage
+            boss.IsChanneling = false;
+            int damage = BossContext?.ChannelDamage ?? (int)(boss.Strength * 3);
+
+            terminal.SetColor("bright_red");
+            terminal.WriteLine($"  *** {boss.Name} unleashes {boss.ChannelingAbilityName}! ***");
+
+            // Hit player
+            if (player.IsAlive)
+            {
+                long playerDmg = Math.Max(1, damage - (long)(Math.Sqrt(player.Defence) * 3));
+                player.HP = Math.Max(0, player.HP - playerDmg);
+                terminal.WriteLine($"  {player.DisplayName} takes {playerDmg} damage!");
+            }
+
+            // Hit all teammates
+            if (result.Teammates != null)
+            {
+                foreach (var tm in result.Teammates.Where(t => t.IsAlive))
+                {
+                    long tmDmg = Math.Max(1, damage - (long)(Math.Sqrt(tm.Defence) * 3));
+                    tm.HP = Math.Max(0, tm.HP - tmDmg);
+                    terminal.WriteLine($"  {tm.DisplayName} takes {tmDmg} damage!");
+                }
+            }
+        }
+        else
+        {
+            terminal.SetColor("bright_magenta");
+            terminal.WriteLine($"  {boss.Name} continues channeling {boss.ChannelingAbilityName}... ({boss.ChannelingRoundsLeft} rounds left!)");
+        }
+    }
+
+    /// <summary>
+    /// Attempt to interrupt a channeling boss. Called during teammate/player actions.
+    /// </summary>
+    private bool TryInterruptBossChannel(Monster boss, Character interrupter)
+    {
+        if (!boss.IsChanneling || !boss.IsAlive || !interrupter.IsAlive) return false;
+
+        // Speed check — need high Agility to even attempt
+        int agility = (int)(interrupter.Agility + interrupter.Dexterity / 2);
+        if (agility < GameConfig.BossChannelInterruptSpeedThreshold) return false;
+
+        // Assassin/Ranger get bonus chance
+        double chance = GameConfig.BossChannelInterruptChance;
+        if (interrupter.Class == CharacterClass.Assassin || interrupter.Class == CharacterClass.Ranger)
+            chance += 0.20;
+        if (interrupter.Class == CharacterClass.Voidreaver)
+            chance += 0.15;
+
+        if (random.NextDouble() < chance)
+        {
+            boss.IsChanneling = false;
+            boss.ChannelingRoundsLeft = 0;
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  *** {interrupter.DisplayName} interrupts {boss.Name}'s {boss.ChannelingAbilityName}! ***");
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Boss AoE attack that hits the entire party. A taunting tank absorbs damage for others.
+    /// Without a tank, everyone takes full damage — forcing tank requirement.
+    /// </summary>
+    private async Task ProcessBossAoE(Monster boss, Character player, CombatResult result)
+    {
+        if (BossContext == null) return;
+
+        int baseDamage = BossContext.AoEDamage > 0 ? BossContext.AoEDamage : (int)(boss.Strength * 2);
+        string abilityName = !string.IsNullOrEmpty(BossContext.AoEAbilityName) ? BossContext.AoEAbilityName : "Devastating Blast";
+
+        terminal.SetColor("bright_red");
+        terminal.WriteLine($"  *** {boss.Name} unleashes {abilityName}! ***");
+
+        // Check if anyone is taunting (tank absorbing)
+        Character? tank = null;
+        if (result.Teammates != null)
+        {
+            tank = result.Teammates.FirstOrDefault(t => t.IsAlive &&
+                boss.TauntedBy != null && boss.TauntedBy == t.DisplayName);
+        }
+        // Player could also be tanking
+        if (tank == null && boss.TauntedBy != null && boss.TauntedBy == player.DisplayName)
+            tank = player;
+
+        double absorptionRate = tank != null ? BossContext.TankAbsorptionRate : 0.0;
+
+        // Damage each party member
+        var allTargets = new List<Character>();
+        if (player.IsAlive) allTargets.Add(player);
+        if (result.Teammates != null) allTargets.AddRange(result.Teammates.Where(t => t.IsAlive));
+
+        foreach (var target in allTargets)
+        {
+            long dmg = Math.Max(1, baseDamage - (long)(Math.Sqrt(target.Defence) * 3));
+
+            if (tank != null && target != tank)
+            {
+                // Non-tank takes reduced damage (tank absorbs)
+                dmg = (long)(dmg * (1.0 - absorptionRate));
+            }
+            else if (tank != null && target == tank)
+            {
+                // Tank takes extra from absorbing for the party
+                dmg = (long)(dmg * (1.0 + absorptionRate * 0.5));
+            }
+
+            target.HP = Math.Max(0, target.HP - dmg);
+            string tankTag = (tank != null && target == tank) ? " [ABSORBING]" : "";
+            terminal.WriteLine($"  {target.DisplayName} takes {dmg} damage!{tankTag}");
+        }
+
+        if (tank != null)
+        {
+            terminal.SetColor("bright_cyan");
+            terminal.WriteLine($"  {tank.DisplayName}'s taunt absorbs {(int)(absorptionRate * 100)}% of the blast for allies!");
+        }
+        else
+        {
+            terminal.SetColor("yellow");
+            terminal.WriteLine("  No tank is absorbing damage — the full blast hits everyone!");
+        }
+
+        await Task.Delay(GetCombatDelay(500));
+    }
+
+    /// <summary>
+    /// Check if a character is a healer class (can cleanse/dispel boss mechanics).
+    /// </summary>
+    private static bool IsHealerClass(Character c)
+    {
+        return c.Class == CharacterClass.Cleric || c.Class == CharacterClass.Paladin ||
+               c.Class == CharacterClass.Bard || c.Class == CharacterClass.Wavecaller ||
+               c.Class == CharacterClass.Abysswarden;
+    }
+
+    /// <summary>
+    /// Healer teammate attempts to cleanse corruption or dispel doom from party members.
+    /// Called during teammate AI processing.
+    /// </summary>
+    private bool TryHealerCleanse(Character healer, Character player, CombatResult result)
+    {
+        if (!healer.IsAlive || !IsHealerClass(healer)) return false;
+
+        // Priority 1: Dispel Doom (instant-kill prevention is highest priority)
+        // Healers can cleanse themselves — staying alive is critical for the party
+        var doomTargets = new List<Character>();
+        if (player.IsAlive && player.DoomCountdown > 0) doomTargets.Add(player);
+        if (result.Teammates != null)
+            doomTargets.AddRange(result.Teammates.Where(t => t.IsAlive && t.DoomCountdown > 0));
+
+        if (doomTargets.Count > 0)
+        {
+            // Dispel the most urgent doom (lowest countdown)
+            var target = doomTargets.OrderBy(t => t.DoomCountdown).First();
+            target.DoomCountdown = 0;
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {healer.DisplayName} dispels DOOM from {target.DisplayName}!");
+            return true;
+        }
+
+        // Priority 2: Cleanse corruption stacks (3+ stacks)
+        var corruptTargets = new List<Character>();
+        if (player.IsAlive && player.CorruptionStacks >= 3) corruptTargets.Add(player);
+        if (result.Teammates != null)
+            corruptTargets.AddRange(result.Teammates.Where(t => t.IsAlive && t.CorruptionStacks >= 3));
+
+        if (corruptTargets.Count > 0)
+        {
+            var target = corruptTargets.OrderByDescending(t => t.CorruptionStacks).First();
+            int removed = Math.Min(target.CorruptionStacks, 3 + healer.Level / 20);
+            target.CorruptionStacks = Math.Max(0, target.CorruptionStacks - removed);
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {healer.DisplayName} cleanses {removed} corruption from {target.DisplayName}! ({target.CorruptionStacks} remaining)");
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Apply phase immunity to a boss. Called during phase transitions.
+    /// Physical immunity forces magic damage, magical immunity forces physical.
+    /// </summary>
+    private void ApplyPhaseImmunity(Monster boss, bool physical, int rounds)
+    {
+        boss.IsPhysicalImmune = physical;
+        boss.IsMagicalImmune = !physical;
+        boss.PhaseImmunityRounds = rounds;
+
+        string immunityType = physical ? "physical" : "magical";
+        terminal.SetColor("bright_magenta");
+        terminal.WriteLine($"  {boss.Name} becomes immune to {immunityType} damage for {rounds} rounds!");
+        terminal.SetColor("yellow");
+        terminal.WriteLine($"  Use {(physical ? "magical spells" : "physical attacks")} to deal damage!");
+    }
+
+    /// <summary>
+    /// Check damage against boss phase immunity. Returns modified damage.
+    /// </summary>
+    private long ApplyPhaseImmunityDamage(Monster boss, long damage, bool isMagicalDamage)
+    {
+        if (boss.IsPhysicalImmune && !isMagicalDamage)
+        {
+            return (long)(damage * GameConfig.BossPhaseImmunityResidual);
+        }
+        if (boss.IsMagicalImmune && isMagicalDamage)
+        {
+            return (long)(damage * GameConfig.BossPhaseImmunityResidual);
+        }
+        return damage;
+    }
+
+    /// <summary>
+    /// Process all boss party mechanics at the start of each round.
+    /// Runs after phase transitions, before player action.
+    /// </summary>
+    private async Task ProcessBossRoundMechanics(Monster bossMonster, Character player, CombatResult result, int roundNumber)
+    {
+        if (BossContext == null) return;
+
+        // Track round
+        BossContext.CombatRound = roundNumber;
+
+        // 1. Enrage timer check
+        CheckBossEnrage(BossContext, bossMonster, roundNumber);
+
+        // 2. Boss channeling tick (if active)
+        ProcessBossChannel(bossMonster, player, result);
+
+        // 3. Start new channel if frequency hit and not already channeling
+        if (BossContext.ChannelFrequency > 0 && !bossMonster.IsChanneling &&
+            roundNumber > 1 && roundNumber % BossContext.ChannelFrequency == 0)
+        {
+            StartBossChannel(bossMonster, BossContext);
+        }
+
+        // 4. Boss AoE if frequency hit
+        if (BossContext.AoEFrequency > 0 && roundNumber > 1 &&
+            roundNumber % BossContext.AoEFrequency == 0)
+        {
+            await ProcessBossAoE(bossMonster, player, result);
+        }
+
+        // 5. Corruption tick on all party members
+        if (player.IsAlive) ProcessCorruptionTick(player, result);
+        if (result.Teammates != null)
+        {
+            foreach (var tm in result.Teammates.Where(t => t.IsAlive).ToList())
+                ProcessCorruptionTick(tm, result);
+        }
+
+        // 6. Doom tick on all party members
+        if (player.IsAlive) ProcessDoomTick(player, result);
+        if (result.Teammates != null)
+        {
+            foreach (var tm in result.Teammates.Where(t => t.IsAlive).ToList())
+                ProcessDoomTick(tm, result);
+        }
+
+        // 6b. Handle teammate deaths from corruption/doom (proper death handlers)
+        if (result.Teammates != null)
+        {
+            foreach (var tm in result.Teammates.Where(t => !t.IsAlive).ToList())
+            {
+                string killerName = bossMonster.Name;
+                BroadcastGroupCombatEvent(result,
+                    $"\u001b[1;31m  ═══ {tm.DisplayName} has fallen to {killerName}'s dark powers! ═══\u001b[0m");
+
+                if (tm.IsEcho)
+                {
+                    terminal.SetColor("bright_cyan");
+                    terminal.WriteLine($"  {tm.DisplayName}'s echo dissipates...");
+                    result.Teammates.Remove(tm);
+                }
+                else if (tm.IsMercenary)
+                {
+                    await HandleMercenaryDeath(tm, killerName, result);
+                }
+                else if (tm.IsCompanion && tm.CompanionId.HasValue)
+                {
+                    await HandleCompanionDeath(tm, killerName, result);
+                }
+                else if (tm.IsGroupedPlayer)
+                {
+                    terminal.SetColor("dark_red");
+                    terminal.WriteLine($"  {tm.DisplayName} has been slain by {killerName}'s corruption!");
+                    result.Teammates.Remove(tm);
+                    result.CombatLog.Add($"{tm.DisplayName} was slain by {killerName}");
+                    if (tm.CombatInputChannel != null)
+                    {
+                        tm.CombatInputChannel.Writer.TryComplete();
+                        tm.CombatInputChannel = null;
+                    }
+                    tm.IsAwaitingCombatInput = false;
+                }
+                else
+                {
+                    await HandleNpcTeammateDeath(tm, killerName, result);
+                }
+
+                // Sync companion HP back to CompanionSystem
+                if (tm.IsCompanion)
+                {
+                    var companionSystem = UsurperRemake.Systems.CompanionSystem.Instance;
+                    companionSystem.SyncCompanionHP(tm);
+                }
+            }
+        }
+
+        // 7. Phase immunity countdown
+        if (bossMonster.PhaseImmunityRounds > 0)
+        {
+            bossMonster.PhaseImmunityRounds--;
+            if (bossMonster.PhaseImmunityRounds <= 0)
+            {
+                bossMonster.IsPhysicalImmune = false;
+                bossMonster.IsMagicalImmune = false;
+                terminal.SetColor("cyan");
+                terminal.WriteLine($"  {bossMonster.Name}'s immunity fades!");
+            }
+        }
+
+        // 8. Decrement potion cooldown
+        if (player.PotionCooldownRounds > 0)
+            player.PotionCooldownRounds--;
+
+        // 9. Boss randomly applies corruption to a party member (phase 2+, 30% chance)
+        if (BossContext.CorruptionDamagePerStack > 0 && BossContext.CurrentPhase >= 2 && random.NextDouble() < 0.30)
+        {
+            var targets = new List<Character>();
+            if (player.IsAlive) targets.Add(player);
+            if (result.Teammates != null) targets.AddRange(result.Teammates.Where(t => t.IsAlive));
+            if (targets.Count > 0)
+            {
+                var target = targets[random.Next(targets.Count)];
+                int stacks = BossContext.CurrentPhase >= 3 ? 2 : 1;
+                ApplyCorruptionStacks(target, stacks);
+            }
+        }
+
+        // 10. Boss applies Doom (phase 3 only, 15% chance, once per target)
+        if (BossContext.DoomRounds > 0 && BossContext.CurrentPhase >= 3 && random.NextDouble() < 0.15)
+        {
+            var targets = new List<Character>();
+            if (player.IsAlive && player.DoomCountdown <= 0) targets.Add(player);
+            if (result.Teammates != null)
+                targets.AddRange(result.Teammates.Where(t => t.IsAlive && t.DoomCountdown <= 0));
+            if (targets.Count > 0)
+            {
+                var target = targets[random.Next(targets.Count)];
+                ApplyDoom(target, BossContext.DoomRounds);
+            }
+        }
     }
 
     /// <summary>
@@ -20143,6 +20843,24 @@ public class BossCombatContext
     public double BossDefenseMultiplier { get; set; } = 1.0;
     public bool BossConfused { get; set; }
     public bool BossWeakened { get; set; }
+
+    // End-game party balance mechanics (v0.52.1)
+    public int CombatRound { get; set; } = 0;             // Current round number
+    public int EnrageRound { get; set; } = 0;             // Round when boss enrages (0 = no enrage)
+    public bool IsEnraged { get; set; } = false;          // Boss has enraged — stats doubled
+    public int PotionCooldownRounds { get; set; } = 2;    // Rounds player must wait between potions in boss fights
+    public bool HasPhysicalImmunityPhase { get; set; }    // Boss has a physical immunity phase
+    public bool HasMagicalImmunityPhase { get; set; }     // Boss has a magical immunity phase
+    public int CorruptionDamagePerStack { get; set; }     // Damage per corruption stack per round
+    public int DoomRounds { get; set; } = 3;              // Rounds before Doom kills
+    public int ChannelFrequency { get; set; } = 0;        // Every N rounds boss channels (0 = never)
+    public string ChannelAbilityName { get; set; } = "";  // Name of channeled ability
+    public int ChannelDamage { get; set; } = 0;           // Damage if channel completes
+    public int AoEFrequency { get; set; } = 0;            // Every N rounds boss does party-wide AoE (0 = never)
+    public int AoEDamage { get; set; } = 0;               // Base AoE damage
+    public string AoEAbilityName { get; set; } = "";      // Name of AoE ability
+    public double TankAbsorptionRate { get; set; } = 0.6; // % of AoE damage absorbed by taunting tank
+    public double DivineArmorReduction { get; set; } = 0;  // % damage reduction from divine armor (set by OldGodBossSystem)
 
     /// <summary>
     /// Determine what phase the boss should be in based on HP percentage

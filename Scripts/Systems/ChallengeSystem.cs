@@ -639,11 +639,11 @@ public class ChallengeSystem
         var currentControllers = CityControlSystem.Instance.GetCityControllers();
         var controllingTeam = CityControlSystem.Instance.GetControllingTeam();
 
-        // Get all teams
+        // Get all teams (include solo teams — a single strong member can challenge)
         var teams = NPCSpawnSystem.Instance?.ActiveNPCs?
-            .Where(n => !string.IsNullOrEmpty(n.Team) && n.IsAlive)
+            .Where(n => !string.IsNullOrEmpty(n.Team) && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0)
             .GroupBy(n => n.Team)
-            .Where(g => g.Count() >= 2) // Only teams with 2+ members
+            .Where(g => g.Count() >= 1)
             .ToList();
 
         if (teams == null || teams.Count < 2)
@@ -748,12 +748,29 @@ public class ChallengeSystem
         npc.CurrentLocation = "Prison";
         npc.CellDoorOpen = false;
 
+        // Clear CTurf — imprisoned NPCs cannot hold city control
+        if (npc.CTurf)
+        {
+            npc.CTurf = false;
+            // Check if anyone else on their team still has CTurf
+            if (!string.IsNullOrEmpty(npc.Team))
+            {
+                var teammates = NPCSpawnSystem.Instance?.ActiveNPCs?
+                    .Where(n => n.Team == npc.Team && n.CTurf && n.IsAlive && !n.IsDead && n.DaysInPrison <= 0)
+                    .ToList();
+                if (teammates == null || teammates.Count == 0)
+                {
+                    // No alive, free teammates with CTurf — team loses city control
+                    CityControlSystem.Instance.RemoveCityControl(npc.Team);
+                }
+            }
+        }
+
         // Also add to King's prison record if there's a King
         var king = CastleLocation.GetCurrentKing();
         king?.ImprisonCharacter(npc.Name, days, crime);
 
         NewsSystem.Instance?.Newsy(true, $"{npc.Name} was thrown in prison for {days} days!");
-        // GD.Print($"[Challenge] {npc.Name} imprisoned for {days} days: {crime}");
     }
 
     /// <summary>

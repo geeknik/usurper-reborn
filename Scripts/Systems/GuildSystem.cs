@@ -380,6 +380,45 @@ public class GuildSystem
     }
 
     /// <summary>
+    /// Get all guilds ordered by member count (descending), then bank gold.
+    /// Used by the Guild Board on Main Street.
+    /// </summary>
+    public List<GuildInfo> GetAllGuilds()
+    {
+        var guilds = new List<GuildInfo>();
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT g.name, g.display_name, g.motto, g.leader_username, g.bank_gold, g.created_at,
+                       (SELECT COUNT(*) FROM guild_members WHERE guild_name = g.name) as member_count
+                FROM guilds g
+                ORDER BY member_count DESC, g.bank_gold DESC";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                guilds.Add(new GuildInfo
+                {
+                    DisplayName = reader.GetString(1),
+                    Motto = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                    LeaderUsername = reader.GetString(3),
+                    BankGold = reader.GetInt64(4),
+                    CreatedAt = reader.GetString(5),
+                    MemberCount = reader.GetInt32(6)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to get all guilds: {ex.Message}");
+        }
+        return guilds;
+    }
+
+    /// <summary>
     /// Get online members of a guild for chat broadcast.
     /// </summary>
     public List<string> GetOnlineGuildMembers(string guildName)

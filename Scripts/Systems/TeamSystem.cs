@@ -129,21 +129,20 @@ public partial class TeamSystem
         
         if (remainingMembers == 0)
         {
-            // Team dissolved
-            newsSystem.WriteTeamNews("Gang Dissolved!",
-                $"Gang {GameConfig.NewsColorHighlight}{oldTeam}{GameConfig.NewsColorDefault} has been disbanded!");
-                
+            // Team dissolved — clean up city control
             if (hadTurf)
             {
-                newsSystem.WriteTeamNews("Town Liberation!",
-                    $"The town is now free from gang control!");
+                CityControlSystem.Instance.RemoveCityControl(oldTeam);
             }
+
+            newsSystem.WriteTeamNews("Gang Dissolved!",
+                $"Gang {GameConfig.NewsColorHighlight}{oldTeam}{GameConfig.NewsColorDefault} has been disbanded!");
         }
         else
         {
             // Notify remaining team members
             NotifyTeamMembers(oldTeam, $"{player.Name2} has left the team!", player.Name2);
-            
+
             newsSystem.WriteTeamNews("Gang Deserter!",
                 $"{GameConfig.NewsColorPlayer}{player.Name2}{GameConfig.NewsColorDefault} left {GameConfig.NewsColorHighlight}{oldTeam}{GameConfig.NewsColorDefault}!");
         }
@@ -167,14 +166,32 @@ public partial class TeamSystem
             return false; // Can't sack yourself
             
         string teamName = member.Team;
-        
+        bool memberHadTurf = member.CTurf;
+
         // Remove member
         member.Team = "";
         member.TeamPW = "";
         member.CTurf = false;
         member.TeamRec = 0;
         member.GymOwner = 0;
-        
+
+        // If sacked member had CTurf, check if remaining members still have it
+        // If no one else has CTurf, the team loses city control
+        if (memberHadTurf)
+        {
+            var remainingMembers = GetTeamMembers(teamName);
+            bool anyoneHasTurf = remainingMembers.Any(m => m.CTurf);
+            if (!anyoneHasTurf && remainingMembers.Count > 0)
+            {
+                // No remaining member has CTurf — city control is lost
+                CityControlSystem.Instance.RemoveCityControl(teamName);
+            }
+            else if (remainingMembers.Count == 0)
+            {
+                CityControlSystem.Instance.RemoveCityControl(teamName);
+            }
+        }
+
         // Mail the sacked member
         MailSystem.SendMail(member.Name2, "Team", 
             $"You were {GameConfig.NewsColorDeath}sacked{GameConfig.NewsColorDefault} from the team by {GameConfig.NewsColorPlayer}{leader.Name2}{GameConfig.NewsColorDefault}!");
@@ -295,41 +312,57 @@ public partial class TeamSystem
     /// </summary>
     private void SetRemoveTurfFlags(Character winner, string loserTeam, int mailType)
     {
-        // Set winner's team flags
-        winner.CTurf = true;
-        winner.TeamRec = 0; // Reset record counter
-        
+        // Set winner's team flags (only if alive and not imprisoned)
+        bool winnerPermaDead = winner is NPC npcWinner && npcWinner.IsDead;
+        if (winner.IsAlive && !winnerPermaDead && winner.DaysInPrison <= 0)
+        {
+            winner.CTurf = true;
+            winner.TeamRec = 0; // Reset record counter
+        }
+
         var winningTeam = GetTeamMembers(winner.Team);
         foreach (var member in winningTeam)
         {
             if (member.Name2 != winner.Name2)
             {
-                member.CTurf = true;
-                member.TeamRec = 0;
-                
-                // Mail team members about victory
-                string mailSubject = "Town Control!";
-                string mailMessage = mailType == 1 
-                    ? $"{winner.Name2} led your team to a glorious victory! The opponents were not able to defend the Town. You are in charge now!"
-                    : $"{winner.Name2} led your team to a glorious victory! {loserTeam} put up a fight, but was not able to defend their turf. You are in charge now!";
-                    
-                MailSystem.SendMail(member.Name2, mailSubject, mailMessage);
+                bool memberPermaDead = member is NPC npcW && npcW.IsDead;
+                // Only grant CTurf to alive, non-imprisoned members
+                if (member.IsAlive && !memberPermaDead && member.DaysInPrison <= 0)
+                {
+                    member.CTurf = true;
+                    member.TeamRec = 0;
+                }
+
+                // Only mail alive members
+                if (member.IsAlive && !memberPermaDead)
+                {
+                    string mailSubject = "Town Control!";
+                    string mailMessage = mailType == 1
+                        ? $"{winner.Name2} led your team to a glorious victory! The opponents were not able to defend the Town. You are in charge now!"
+                        : $"{winner.Name2} led your team to a glorious victory! {loserTeam} put up a fight, but was not able to defend their turf. You are in charge now!";
+
+                    MailSystem.SendMail(member.Name2, mailSubject, mailMessage);
+                }
             }
         }
-        
+
         // Remove loser's team flags
         var losingTeam = GetTeamMembers(loserTeam);
         foreach (var member in losingTeam)
         {
             member.CTurf = false;
-            
-            // Mail losing team about defeat
-            string lossSubject = $"{GameConfig.NewsColorDeath}Lost Town Control!{GameConfig.NewsColorDefault}";
-            string lossMessage = mailType == 1
-                ? $"{winner.Name2} led their team to a victory against your gang! Your team was not ready to meet them! The Town is no longer yours..."
-                : $"{winner.Name2} led their team to a victory against your bunch! Your team was not able to fend off the attack! The Town is no longer yours...";
-                
-            MailSystem.SendMail(member.Name2, lossSubject, lossMessage);
+
+            // Only mail alive members
+            bool loserPermaDead = member is NPC npcL && npcL.IsDead;
+            if (member.IsAlive && !loserPermaDead)
+            {
+                string lossSubject = $"{GameConfig.NewsColorDeath}Lost Town Control!{GameConfig.NewsColorDefault}";
+                string lossMessage = mailType == 1
+                    ? $"{winner.Name2} led their team to a victory against your gang! Your team was not ready to meet them! The Town is no longer yours..."
+                    : $"{winner.Name2} led their team to a victory against your bunch! Your team was not able to fend off the attack! The Town is no longer yours...";
+
+                MailSystem.SendMail(member.Name2, lossSubject, lossMessage);
+            }
         }
     }
     
@@ -504,11 +537,14 @@ public partial class TeamSystem
     private List<Character> GetActiveCombatMembers(string teamName)
     {
         var allCharacters = GetAllCharacters();
-        return allCharacters.Where(c => 
-            c.Team == teamName && 
-            c.HP > 0 && 
-            c.Allowed && 
+        return allCharacters.Where(c =>
+            c.Team == teamName &&
+            c.HP > 0 &&
+            c.IsAlive &&
+            !(c is NPC npcCheck && npcCheck.IsDead) &&
+            c.Allowed &&
             c.Location != GameConfig.OfflineLocationPrison &&
+            c.DaysInPrison <= 0 &&
             !c.Deleted).ToList();
     }
     
@@ -518,7 +554,8 @@ public partial class TeamSystem
     private Character GetTurfController()
     {
         var allCharacters = GetAllCharacters();
-        return allCharacters.FirstOrDefault(c => c.CTurf && !string.IsNullOrEmpty(c.Team));
+        return allCharacters.FirstOrDefault(c => c.CTurf && !string.IsNullOrEmpty(c.Team)
+            && c.IsAlive && !(c is NPC npc && npc.IsDead) && c.DaysInPrison <= 0);
     }
     
     /// <summary>
@@ -559,13 +596,17 @@ public partial class TeamSystem
     
     /// <summary>
     /// Transfer team status from one member to another - Pascal TCORNER.PAS functionality
+    /// New joiners inherit CTurf only if their team currently controls the city.
+    /// TeamRec starts at 0 for new members.
     /// </summary>
     private void TransferTeamStatus(Character from, Character to)
     {
         to.Team = from.Team;
         to.TeamPW = from.TeamPW;
-        to.CTurf = from.CTurf;
-        to.TeamRec = from.TeamRec;
+        // Only grant CTurf if the team actually controls the city right now
+        var controllingTeam = CityControlSystem.Instance.GetControllingTeam();
+        to.CTurf = !string.IsNullOrEmpty(controllingTeam) && controllingTeam == from.Team;
+        to.TeamRec = 0;
     }
     
     /// <summary>
@@ -754,13 +795,18 @@ public partial class TeamSystem
             // Handle turf transfer in automated battles
             var winningTeam = GetTeamMembers(result.Winner);
             var losingTeam = GetTeamMembers(result.Loser);
-            
+
             foreach (var member in winningTeam)
             {
-                member.CTurf = true;
-                member.TeamRec = 0;
+                // Only grant CTurf to alive, non-imprisoned members
+                bool isPermaDead = member is NPC npcAuto && npcAuto.IsDead;
+                if (member.IsAlive && !isPermaDead && member.DaysInPrison <= 0)
+                {
+                    member.CTurf = true;
+                    member.TeamRec = 0;
+                }
             }
-            
+
             foreach (var member in losingTeam)
             {
                 member.CTurf = false;

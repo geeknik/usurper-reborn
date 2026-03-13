@@ -1367,18 +1367,17 @@ namespace UsurperRemake.Systems
             try
             {
                 using var connection = OpenConnection();
+
+                // Remove any case-variant entries first (PK is case-sensitive but usernames should be case-insensitive)
+                using var delCmd = connection.CreateCommand();
+                delCmd.CommandText = "DELETE FROM online_players WHERE LOWER(username) = LOWER(@username);";
+                delCmd.Parameters.AddWithValue("@username", username);
+                await delCmd.ExecuteNonQueryAsync();
+
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = @"
                     INSERT INTO online_players (username, display_name, location, node_id, connection_type, ip_address, connected_at, last_heartbeat)
-                    VALUES (@username, @displayName, @location, @nodeId, @connectionType, @ipAddress, datetime('now'), datetime('now'))
-                    ON CONFLICT(username) DO UPDATE SET
-                        display_name = @displayName,
-                        location = @location,
-                        node_id = @nodeId,
-                        connection_type = @connectionType,
-                        ip_address = @ipAddress,
-                        connected_at = datetime('now'),
-                        last_heartbeat = datetime('now');
+                    VALUES (@username, @displayName, @location, @nodeId, @connectionType, @ipAddress, datetime('now'), datetime('now'));
                 ";
                 cmd.Parameters.AddWithValue("@username", username);
                 cmd.Parameters.AddWithValue("@displayName", displayName);

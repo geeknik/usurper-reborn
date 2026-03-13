@@ -988,21 +988,7 @@ namespace UsurperRemake.Systems
                         var equipment = EquipmentDatabase.GetById(kvp.Value);
                         if (equipment != null)
                         {
-                            player.Inventory.Add(new global::Item
-                            {
-                                Name = equipment.Name,
-                                Type = ObjType.Magic,
-                                Value = equipment.Value,
-                                Attack = equipment.WeaponPower,
-                                Armor = equipment.ArmorClass,
-                                Strength = equipment.StrengthBonus,
-                                Dexterity = equipment.DexterityBonus,
-                                HP = equipment.MaxHPBonus,
-                                Mana = equipment.MaxManaBonus,
-                                Defence = equipment.DefenceBonus,
-                                IsCursed = equipment.IsCursed,
-                                MinLevel = equipment.MinLevel
-                            });
+                            player.Inventory.Add(player.ConvertEquipmentToLegacyItem(equipment));
                             itemsReturned++;
                         }
                     }
@@ -1211,14 +1197,7 @@ namespace UsurperRemake.Systems
                         var equipment = EquipmentDatabase.GetById(kvp.Value);
                         if (equipment != null)
                         {
-                            player.Inventory.Add(new global::Item
-                            {
-                                Name = equipment.Name,
-                                Type = ObjType.Magic,
-                                Value = equipment.Value,
-                                Attack = equipment.WeaponPower,
-                                Armor = equipment.ArmorClass
-                            });
+                            player.Inventory.Add(player.ConvertEquipmentToLegacyItem(equipment));
                             itemsReturned++;
                         }
                     }

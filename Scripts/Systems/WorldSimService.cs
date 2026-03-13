@@ -237,6 +237,9 @@ namespace UsurperRemake.Systems
                         RestoreNPCsFromData(npcData);
                         DebugLogger.Instance.LogInfo("WORLDSIM", $"Loaded {npcData.Count} NPCs from database");
 
+                        // One-time class distribution rebalance (v0.52.1)
+                        NPCSpawnSystem.Instance.RebalanceClassDistribution();
+
                         // Process dead NPCs for respawn
                         worldSimulator?.ProcessDeadNPCsOnLoad();
                         return;

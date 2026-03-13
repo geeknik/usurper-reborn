@@ -121,6 +121,15 @@ public class Monster
     public bool IsCorroded { get; set; } = false;       // Armor corroded — reduced defence
     public int CorrodedDuration { get; set; } = 0;
 
+    // Boss end-game party mechanics (v0.52.1)
+    public bool IsChanneling { get; set; } = false;        // Boss is charging a devastating ability
+    public int ChannelingRoundsLeft { get; set; } = 0;     // Rounds until channel completes
+    public string ChannelingAbilityName { get; set; } = ""; // Name of ability being channeled
+    public bool IsPhysicalImmune { get; set; } = false;    // Immune to physical damage (phase mechanic)
+    public bool IsMagicalImmune { get; set; } = false;     // Immune to magical damage (phase mechanic)
+    public int PhaseImmunityRounds { get; set; } = 0;      // Rounds remaining for phase immunity
+    public bool IsEnraged { get; set; } = false;           // Boss enrage timer expired — stats doubled
+
     // Per-round status tick tracking — prevents boss multi-attacks from ticking statuses multiple times
     public bool StatusTickedThisRound { get; set; } = false;
 

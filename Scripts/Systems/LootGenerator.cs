@@ -1166,8 +1166,9 @@ public static class LootGenerator
 
             ApplyEffectsToItem(item, effects, isWeapon: false);
 
-            // Apply stat bonuses based on template name (e.g., "Sash of Focus" → +INT/+Mana)
-            ApplyThematicBonuses(item, template.Name, finalPower);
+            // Apply stat bonuses based on full item name including effect suffixes
+            // (e.g., "Leather Gloves of the Arcane" → +INT, not ranger stats from "Leather Gloves")
+            ApplyThematicBonuses(item, item.Name, finalPower);
 
             if (isCursed)
             {

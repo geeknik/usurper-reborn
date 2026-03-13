@@ -269,6 +269,11 @@ public class Character
     public bool HasStatusImmunity { get; set; } = false;  // Immune to debuffs
     public int StatusImmunityDuration { get; set; } = 0;
 
+    // Boss fight party mechanics (v0.52.1 — combat-transient, not serialized)
+    public int CorruptionStacks { get; set; } = 0;        // Stacking DoT from boss abilities (only healers cleanse)
+    public int DoomCountdown { get; set; } = 0;           // Rounds until Doom kills (0 = no doom, only healers dispel)
+    public int PotionCooldownRounds { get; set; } = 0;    // Rounds until potion can be used again (boss fights)
+
     // Companion system integration
     public bool IsCompanion { get; set; } = false;
     public UsurperRemake.Systems.CompanionId? CompanionId { get; set; } = null;
@@ -891,11 +896,14 @@ public class Character
             Dexterity = equipment.DexterityBonus,
             Wisdom = equipment.WisdomBonus,
             Charisma = equipment.CharismaBonus,
+            Agility = equipment.AgilityBonus,
+            Stamina = equipment.StaminaBonus,
             HP = equipment.MaxHPBonus,
             Mana = equipment.MaxManaBonus,
             Defence = equipment.DefenceBonus,
             IsCursed = equipment.IsCursed,
-            Cursed = equipment.IsCursed
+            Cursed = equipment.IsCursed,
+            MinLevel = equipment.MinLevel
         };
 
         // Preserve CON/INT as LootEffects for re-equip
@@ -903,6 +911,40 @@ public class Character
             item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Constitution, equipment.ConstitutionBonus));
         if (equipment.IntelligenceBonus != 0)
             item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Intelligence, equipment.IntelligenceBonus));
+
+        // Preserve enchantments as LootEffects
+        if (equipment.HasFireEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.FireDamage, 1));
+        if (equipment.HasFrostEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.IceDamage, 1));
+        if (equipment.HasLightningEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.LightningDamage, 1));
+        if (equipment.HasPoisonEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.PoisonDamage, equipment.PoisonDamage));
+        if (equipment.HasHolyEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.HolyDamage, 1));
+        if (equipment.HasShadowEnchant)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.ShadowDamage, 1));
+
+        // Preserve proc effects as LootEffects
+        if (equipment.LifeSteal > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.LifeSteal, equipment.LifeSteal));
+        if (equipment.ManaSteal > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.ManaSteal, equipment.ManaSteal));
+        if (equipment.CriticalChanceBonus > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.CriticalStrike, equipment.CriticalChanceBonus));
+        if (equipment.CriticalDamageBonus > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.CriticalDamage, equipment.CriticalDamageBonus));
+        if (equipment.ArmorPiercing > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.ArmorPiercing, equipment.ArmorPiercing));
+        if (equipment.Thorns > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Thorns, equipment.Thorns));
+        if (equipment.HPRegen > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Regeneration, equipment.HPRegen));
+        if (equipment.ManaRegen > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.ManaRegen, equipment.ManaRegen));
+        if (equipment.MagicResistance > 0)
+            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.MagicResist, equipment.MagicResistance));
 
         return item;
     }
