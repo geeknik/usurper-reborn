@@ -1491,6 +1491,7 @@ public class HomeLocation : BaseLocation
             DefenceBonus = item.Defence,
             StrengthBonus = item.Strength,
             DexterityBonus = item.Dexterity,
+            AgilityBonus = item.Agility,
             WisdomBonus = item.Wisdom,
             CharismaBonus = item.Charisma,
             MaxHPBonus = item.HP,

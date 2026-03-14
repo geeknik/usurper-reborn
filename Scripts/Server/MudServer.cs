@@ -219,6 +219,7 @@ public class MudServer
 
             string connectionType;
             bool isPlainText = false;
+            bool isCp437 = false;
 
             if (isInteractive)
             {
@@ -231,14 +232,18 @@ public class MudServer
                 await stream.WriteAsync(new byte[] { 0xFF, 0xFB, 0x01, 0xFF, 0xFB, 0x03 }, 0, 6, ct);
                 await stream.FlushAsync(ct);
 
-                // Probe terminal type to detect screen-reader clients (e.g. VIP Mud)
-                isPlainText = await ProbeTtypeAsync(stream, ct);
+                // Probe terminal type to detect screen-reader and CP437 BBS clients
+                var probeResult = await ProbeTtypeAsync(stream, ct);
+                isPlainText = probeResult.isPlainText;
+                isCp437 = probeResult.isCp437;
                 if (isPlainText)
                     Console.Error.WriteLine($"[MUD] Screen-reader client detected from {client.Client.RemoteEndPoint} — plain text mode");
+                if (isCp437)
+                    Console.Error.WriteLine($"[MUD] CP437 BBS terminal detected ({probeResult.ttype}) from {client.Client.RemoteEndPoint}");
 
                 // Interactive mode: present login/register menu directly over TCP
                 Console.Error.WriteLine($"[MUD] Interactive connection from {client.Client.RemoteEndPoint}");
-                var result = await InteractiveAuthAsync(stream, sqlBackend, ct, isPlainText);
+                var result = await InteractiveAuthAsync(stream, sqlBackend, ct, isPlainText, isCp437);
                 if (result == null)
                 {
                     client.Close();
@@ -360,6 +365,7 @@ public class MudServer
                     server: this,
                     cancellationToken: ct,
                     isPlainText: isPlainText,
+                    isCp437: isCp437,
                     forwardedIP: forwardedIP
                 );
 
@@ -375,7 +381,7 @@ public class MudServer
                     }
                     if (!ActiveSessions.TryAdd(sessionUsernameKey, session))
                     {
-                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Could not start session. Try again.\u001b[0m\r\n");
+                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Could not start session. Try again.\u001b[0m\r\n", isCp437);
                         client.Close();
                         return;
                     }
@@ -413,7 +419,7 @@ public class MudServer
     /// and raw telnet connections that don't send an AUTH header.
     /// </summary>
     private async Task<(string username, string connectionType)?> InteractiveAuthAsync(
-        NetworkStream stream, SqlSaveBackend sqlBackend, CancellationToken ct, bool isPlainText = false)
+        NetworkStream stream, SqlSaveBackend sqlBackend, CancellationToken ct, bool isPlainText = false, bool isCp437 = false)
     {
         const int MAX_ATTEMPTS = 5;
 
@@ -424,34 +430,34 @@ public class MudServer
             // Show auth menu
             if (isPlainText)
             {
-                await WriteAnsiAsync(stream, "\r\n=== Usurper Reborn Online ===\r\n");
-                await WriteAnsiAsync(stream, "[L] Login\r\n");
-                await WriteAnsiAsync(stream, "[R] Register\r\n");
-                await WriteAnsiAsync(stream, "[Q] Quit\r\n");
-                await WriteAnsiAsync(stream, "Choice: ");
+                await WriteAnsiAsync(stream, "\r\n=== Usurper Reborn Online ===\r\n", isCp437);
+                await WriteAnsiAsync(stream, "[L] Login\r\n", isCp437);
+                await WriteAnsiAsync(stream, "[R] Register\r\n", isCp437);
+                await WriteAnsiAsync(stream, "[Q] Quit\r\n", isCp437);
+                await WriteAnsiAsync(stream, "Choice: ", isCp437);
             }
             else
             {
-                await WriteAnsiAsync(stream, "\u001b[2J\u001b[H"); // Clear screen
-                await WriteAnsiAsync(stream, "\u001b[1;36m");
-                await WriteAnsiAsync(stream, "╔══════════════════════════════════════════════════════════════════════════════╗\r\n");
-                await WriteAnsiAsync(stream, "\u001b[1;37m");
-                await WriteAnsiAsync(stream, "║                    Welcome to Usurper Reborn Online                        ║\r\n");
-                await WriteAnsiAsync(stream, "\u001b[1;36m");
-                await WriteAnsiAsync(stream, "╠══════════════════════════════════════════════════════════════════════════════╣\r\n");
-                await WriteAnsiAsync(stream, "\u001b[0;37m");
-                await WriteAnsiAsync(stream, "║                                                                            ║\r\n");
-                await WriteAnsiAsync(stream, "║  \u001b[1;36m[L]\u001b[0;37m Login to existing account                                           ║\r\n");
-                await WriteAnsiAsync(stream, "║  \u001b[1;32m[R]\u001b[0;37m Register new account                                                ║\r\n");
-                await WriteAnsiAsync(stream, "║  \u001b[1;31m[Q]\u001b[0;37m Quit                                                                ║\r\n");
-                await WriteAnsiAsync(stream, "║                                                                            ║\r\n");
-                await WriteAnsiAsync(stream, "\u001b[1;36m");
-                await WriteAnsiAsync(stream, "╚══════════════════════════════════════════════════════════════════════════════╝\r\n");
-                await WriteAnsiAsync(stream, "\u001b[0m");
-                await WriteAnsiAsync(stream, "\r\n  Choice: ");
+                await WriteAnsiAsync(stream, "\u001b[2J\u001b[H", isCp437); // Clear screen
+                await WriteAnsiAsync(stream, "\u001b[1;36m", isCp437);
+                await WriteAnsiAsync(stream, "╔══════════════════════════════════════════════════════════════════════════════╗\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\u001b[1;37m", isCp437);
+                await WriteAnsiAsync(stream, "║                    Welcome to Usurper Reborn Online                        ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\u001b[1;36m", isCp437);
+                await WriteAnsiAsync(stream, "╠══════════════════════════════════════════════════════════════════════════════╣\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\u001b[0;37m", isCp437);
+                await WriteAnsiAsync(stream, "║                                                                            ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "║  \u001b[1;36m[L]\u001b[0;37m Login to existing account                                           ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "║  \u001b[1;32m[R]\u001b[0;37m Register new account                                                ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "║  \u001b[1;31m[Q]\u001b[0;37m Quit                                                                ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "║                                                                            ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\u001b[1;36m", isCp437);
+                await WriteAnsiAsync(stream, "╚══════════════════════════════════════════════════════════════════════════════╝\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\u001b[0m", isCp437);
+                await WriteAnsiAsync(stream, "\r\n  Choice: ", isCp437);
             }
 
-            var choice = (await ReadLineAsync(stream, ct))?.Trim().ToUpperInvariant();
+            var choice = (await ReadLineAsync(stream, ct, echo: true))?.Trim().ToUpperInvariant();
             if (string.IsNullOrEmpty(choice)) continue;
             if (choice == "Q") return null;
 
@@ -463,20 +469,20 @@ public class MudServer
             {
                 if (isPlainText)
                 {
-                    await WriteAnsiAsync(stream, "Username: ");
-                    username = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "Username: ", isCp437);
+                    username = (await ReadLineAsync(stream, ct, echo: true))?.Trim();
                     if (string.IsNullOrEmpty(username)) continue;
-                    await WriteAnsiAsync(stream, "Password: ");
-                    password = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "Password: ", isCp437);
+                    password = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (string.IsNullOrEmpty(password)) continue;
                 }
                 else
                 {
-                    await WriteAnsiAsync(stream, "\r\n\u001b[1;37m  Username: \u001b[0m");
-                    username = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "\r\n\u001b[1;37m  Username: \u001b[0m", isCp437);
+                    username = (await ReadLineAsync(stream, ct, echo: true))?.Trim();
                     if (string.IsNullOrEmpty(username)) continue;
-                    await WriteAnsiAsync(stream, "\u001b[1;37m  Password: \u001b[0m");
-                    password = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "\u001b[1;37m  Password: \u001b[0m", isCp437);
+                    password = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (string.IsNullOrEmpty(password)) continue;
                 }
             }
@@ -484,53 +490,53 @@ public class MudServer
             {
                 if (isPlainText)
                 {
-                    await WriteAnsiAsync(stream, "Choose a username: ");
-                    username = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "Choose a username: ", isCp437);
+                    username = (await ReadLineAsync(stream, ct, echo: true))?.Trim();
                     if (string.IsNullOrEmpty(username)) continue;
                     if (username.Length < 2 || username.Length > 20)
                     {
-                        await WriteAnsiAsync(stream, "Username must be 2-20 characters.\r\n\r\n");
+                        await WriteAnsiAsync(stream, "Username must be 2-20 characters.\r\n\r\n", isCp437);
                         continue;
                     }
-                    await WriteAnsiAsync(stream, "Choose a password: ");
-                    password = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "Choose a password: ", isCp437);
+                    password = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (string.IsNullOrEmpty(password)) continue;
                     if (password.Length < 4)
                     {
-                        await WriteAnsiAsync(stream, "Password must be at least 4 characters.\r\n\r\n");
+                        await WriteAnsiAsync(stream, "Password must be at least 4 characters.\r\n\r\n", isCp437);
                         continue;
                     }
-                    await WriteAnsiAsync(stream, "Confirm password: ");
-                    var confirm = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "Confirm password: ", isCp437);
+                    var confirm = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (password != confirm)
                     {
-                        await WriteAnsiAsync(stream, "Passwords do not match.\r\n\r\n");
+                        await WriteAnsiAsync(stream, "Passwords do not match.\r\n\r\n", isCp437);
                         continue;
                     }
                 }
                 else
                 {
-                    await WriteAnsiAsync(stream, "\r\n\u001b[1;32m  Choose a username: \u001b[0m");
-                    username = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "\r\n\u001b[1;32m  Choose a username: \u001b[0m", isCp437);
+                    username = (await ReadLineAsync(stream, ct, echo: true))?.Trim();
                     if (string.IsNullOrEmpty(username)) continue;
                     if (username.Length < 2 || username.Length > 20)
                     {
-                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Username must be 2-20 characters.\u001b[0m\r\n\r\n");
+                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Username must be 2-20 characters.\u001b[0m\r\n\r\n", isCp437);
                         continue;
                     }
-                    await WriteAnsiAsync(stream, "\u001b[1;32m  Choose a password: \u001b[0m");
-                    password = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "\u001b[1;32m  Choose a password: \u001b[0m", isCp437);
+                    password = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (string.IsNullOrEmpty(password)) continue;
                     if (password.Length < 4)
                     {
-                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Password must be at least 4 characters.\u001b[0m\r\n\r\n");
+                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Password must be at least 4 characters.\u001b[0m\r\n\r\n", isCp437);
                         continue;
                     }
-                    await WriteAnsiAsync(stream, "\u001b[1;32m  Confirm password: \u001b[0m");
-                    var confirm = (await ReadLineAsync(stream, ct))?.Trim();
+                    await WriteAnsiAsync(stream, "\u001b[1;32m  Confirm password: \u001b[0m", isCp437);
+                    var confirm = (await ReadLineAsync(stream, ct, echo: true, maskChar: '*'))?.Trim();
                     if (password != confirm)
                     {
-                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Passwords do not match.\u001b[0m\r\n\r\n");
+                        await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Passwords do not match.\u001b[0m\r\n\r\n", isCp437);
                         continue;
                     }
                 }
@@ -549,9 +555,9 @@ public class MudServer
                 {
                     Console.Error.WriteLine($"[MUD] Registration failed for '{username}': {regMessage}");
                     if (isPlainText)
-                        await WriteAnsiAsync(stream, $"Error: {regMessage}\r\n\r\n");
+                        await WriteAnsiAsync(stream, $"Error: {regMessage}\r\n\r\n", isCp437);
                     else
-                        await WriteAnsiAsync(stream, $"\r\n\u001b[1;31m  {regMessage}\u001b[0m\r\n\r\n");
+                        await WriteAnsiAsync(stream, $"\r\n\u001b[1;31m  {regMessage}\u001b[0m\r\n\r\n", isCp437);
                     continue;
                 }
                 Console.Error.WriteLine($"[MUD] New player registered: '{username}'");
@@ -563,9 +569,9 @@ public class MudServer
             {
                 Console.Error.WriteLine($"[MUD] Auth failed for '{username}': {message}");
                 if (isPlainText)
-                    await WriteAnsiAsync(stream, $"Error: {message}\r\n\r\n");
+                    await WriteAnsiAsync(stream, $"Error: {message}\r\n\r\n", isCp437);
                 else
-                    await WriteAnsiAsync(stream, $"\r\n\u001b[1;31m  {message}\u001b[0m\r\n\r\n");
+                    await WriteAnsiAsync(stream, $"\r\n\u001b[1;31m  {message}\u001b[0m\r\n\r\n", isCp437);
                 continue;
             }
 
@@ -581,40 +587,59 @@ public class MudServer
                 ActiveSessions.TryRemove(interactiveKey, out _);
                 await Task.Delay(500);
                 if (isPlainText)
-                    await WriteAnsiAsync(stream, "Previous session disconnected.\r\n");
+                    await WriteAnsiAsync(stream, "Previous session disconnected.\r\n", isCp437);
                 else
-                    await WriteAnsiAsync(stream, "\r\n\u001b[1;33m  Previous session disconnected.\u001b[0m\r\n");
+                    await WriteAnsiAsync(stream, "\r\n\u001b[1;33m  Previous session disconnected.\u001b[0m\r\n", isCp437);
             }
 
             if (isPlainText)
-                await WriteAnsiAsync(stream, $"Welcome, {username}!\r\n\r\n");
+                await WriteAnsiAsync(stream, $"Welcome, {username}!\r\n\r\n", isCp437);
             else
-                await WriteAnsiAsync(stream, $"\r\n\u001b[1;32m  Welcome, {username}!\u001b[0m\r\n\r\n");
+                await WriteAnsiAsync(stream, $"\r\n\u001b[1;32m  Welcome, {username}!\u001b[0m\r\n\r\n", isCp437);
             Console.Error.WriteLine($"[MUD] Interactive auth succeeded for '{username}'");
             return (username!, "MUD");
         }
 
         if (isPlainText)
-            await WriteAnsiAsync(stream, "Too many attempts. Goodbye.\r\n");
+            await WriteAnsiAsync(stream, "Too many attempts. Goodbye.\r\n", isCp437);
         else
-            await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Too many attempts. Goodbye.\u001b[0m\r\n");
+            await WriteAnsiAsync(stream, "\r\n\u001b[1;31m  Too many attempts. Goodbye.\u001b[0m\r\n", isCp437);
         return null;
     }
 
-    /// <summary>Write ANSI text to a network stream.</summary>
-    private static async Task WriteAnsiAsync(NetworkStream stream, string text)
+    /// <summary>Cached CP437 encoding instance (initialized once on first use).</summary>
+    private static System.Text.Encoding? _cp437Encoding;
+
+    /// <summary>Write ANSI text to a network stream, optionally encoding as CP437.</summary>
+    private static async Task WriteAnsiAsync(NetworkStream stream, string text, bool cp437 = false)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        byte[] bytes;
+        if (cp437)
+        {
+            if (_cp437Encoding == null)
+            {
+                System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+                _cp437Encoding = System.Text.Encoding.GetEncoding(437,
+                    new System.Text.EncoderReplacementFallback("?"),
+                    new System.Text.DecoderReplacementFallback("?"));
+            }
+            bytes = _cp437Encoding.GetBytes(text);
+        }
+        else
+        {
+            bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        }
         await stream.WriteAsync(bytes, 0, bytes.Length);
     }
 
     /// <summary>
     /// Probe the client's terminal type via telnet TTYPE negotiation.
-    /// Sends IAC DO TTYPE + IAC SB TTYPE SEND, waits up to 250ms for a response,
-    /// and returns true if the client identifies as a screen-reader (e.g. VIP Mud).
+    /// Sends IAC DO TTYPE + IAC SB TTYPE SEND, waits up to 250ms for a response.
+    /// Returns (isPlainText, isCp437, ttypeString).
+    /// isPlainText=true for screen readers (VIP Mud). isCp437=true for BBS terminals (SyncTerm, etc.).
     /// Called only for interactive (non-AUTH) connections after the 500ms AUTH timeout.
     /// </summary>
-    private static async Task<bool> ProbeTtypeAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<(bool isPlainText, bool isCp437, string? ttype)> ProbeTtypeAsync(NetworkStream stream, CancellationToken ct)
     {
         try
         {
@@ -690,7 +715,12 @@ public class MudServer
                 var ttypeStr = ttype.ToString().ToUpperInvariant();
                 Console.Error.WriteLine($"[MUD] TTYPE detected: {ttypeStr}");
                 // VIP Mud identifies as "VIPMUD" or starts with "VIP"
-                return ttypeStr.StartsWith("VIP") || ttypeStr == "DUMB" || ttypeStr == "UNKNOWN";
+                bool isPlain = ttypeStr.StartsWith("VIP") || ttypeStr == "DUMB" || ttypeStr == "UNKNOWN";
+                // BBS terminals that expect CP437 encoding instead of UTF-8
+                bool isCp437 = ttypeStr.Contains("SYNCTERM") || ttypeStr.Contains("NETRUNNER")
+                    || ttypeStr.Contains("MTELNET") || ttypeStr.Contains("FTELNET")
+                    || ttypeStr.Contains("CTERM") || ttypeStr.Contains("ANSI-BBS");
+                return (isPlain, isCp437, ttypeStr);
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
@@ -699,7 +729,7 @@ public class MudServer
             Console.Error.WriteLine($"[MUD] TTYPE probe error: {ex.Message}");
         }
 
-        return false;
+        return (false, false, null);
     }
 
     /// <summary>Read a single line from a network stream (up to \n, strips \r).
@@ -707,10 +737,15 @@ public class MudServer
     ///   0xFF (IAC) + cmd + [option]  — WILL/WONT/DO/DONT (0xFB-0xFE) + 1 option byte
     ///   0xFF (IAC) + 0xFA (SB) + data + 0xFF + 0xF0 (SE)  — subnegotiation block
     /// </summary>
-    private static async Task<string?> ReadLineAsync(NetworkStream stream, CancellationToken ct)
+    /// <param name="echo">If true, echo each typed character back to the stream (for MUD clients
+    /// that disabled local echo after receiving IAC WILL ECHO).</param>
+    /// <param name="maskChar">If set and echo is true, echo this character instead of the real one (for passwords).</param>
+    private static async Task<string?> ReadLineAsync(NetworkStream stream, CancellationToken ct,
+        bool echo = false, char? maskChar = null)
     {
         var buffer = new byte[1];
         var line = new System.Text.StringBuilder();
+        bool prevWasCR = false;
 
         while (!ct.IsCancellationRequested)
         {
@@ -744,8 +779,50 @@ public class MudServer
             }
 
             char c = (char)b;
-            if (c == '\n') return line.ToString().TrimEnd('\r');
+
+            // Handle \r\n — SyncTerm and other terminals send \r\n for Enter;
+            // treat \n after \r as redundant
+            if (c == '\n')
+            {
+                if (prevWasCR)
+                {
+                    prevWasCR = false;
+                    continue; // skip \n that follows \r
+                }
+                if (echo) await stream.WriteAsync(new byte[] { (byte)'\r', (byte)'\n' }, 0, 2, ct);
+                return line.ToString();
+            }
+            if (c == '\r')
+            {
+                prevWasCR = true;
+                if (echo) await stream.WriteAsync(new byte[] { (byte)'\r', (byte)'\n' }, 0, 2, ct);
+                return line.ToString();
+            }
+            prevWasCR = false;
+
+            // Handle backspace (BS 0x08 or DEL 0x7F)
+            if (c == '\b' || c == 0x7F)
+            {
+                if (line.Length > 0)
+                {
+                    line.Remove(line.Length - 1, 1);
+                    if (echo)
+                        await stream.WriteAsync(new byte[] { (byte)'\b', (byte)' ', (byte)'\b' }, 0, 3, ct);
+                }
+                continue;
+            }
+
+            // Skip non-printable control characters
+            if (c < ' ') continue;
+
             line.Append(c);
+
+            // Echo the character (or mask for passwords)
+            if (echo)
+            {
+                byte echoChar = (byte)(maskChar ?? c);
+                await stream.WriteAsync(new byte[] { echoChar }, 0, 1, ct);
+            }
 
             if (line.Length > 1024) return null; // Safety limit
         }

@@ -8154,6 +8154,7 @@ public abstract class BaseLocation
             DefenceBonus = invItem.Defence,
             StrengthBonus = invItem.Strength,
             DexterityBonus = invItem.Dexterity,
+            AgilityBonus = invItem.Agility,
             WisdomBonus = invItem.Wisdom,
             CharismaBonus = invItem.Charisma,
             MaxHPBonus = invItem.HP,

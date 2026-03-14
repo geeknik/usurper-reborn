@@ -83,6 +83,10 @@
   "stats.time_hours": "{0}h ago",
   "stats.time_days": "{0}d ago",
   "stats.immortal": "Immortal",
+  "stats.online_none": "No adventurers online",
+  "stats.online_one": "1 adventurer online",
+  "stats.online_many": "{0} adventurers online",
+  "stats.online_empty": "The realm awaits its next hero...",
   "stats.online": "ONLINE",
   "stats.offline": "OFFLINE",
 

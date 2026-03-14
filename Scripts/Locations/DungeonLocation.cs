@@ -146,7 +146,7 @@ public class DungeonLocation : BaseLocation
                 term.WriteLine("");
             }
             term.SetColor("cyan");
-            term.WriteLine($"  {Loc.Get("dungeon.floor", currentDungeonLevel)} - {currentFloor.Theme}");
+            term.WriteLine($"  {Loc.Get("dungeon.floor", currentDungeonLevel)} - {GetThemeShortName(currentFloor.Theme)}");
             term.SetColor("gray");
             term.WriteLine($"  {GetThemeDescription(currentFloor.Theme)}");
 
@@ -2158,7 +2158,7 @@ public class DungeonLocation : BaseLocation
 
         // Line 2: Theme
         terminal.SetColor(GetThemeColor(currentFloor.Theme));
-        terminal.Write($" {currentFloor.Theme}");
+        terminal.Write($" {GetThemeShortName(currentFloor.Theme)}");
         terminal.SetColor("gray");
         terminal.WriteLine($" | {room.Description}");
 
@@ -2305,7 +2305,7 @@ public class DungeonLocation : BaseLocation
         var player = GetCurrentPlayer();
 
         // Line 1: Header
-        ShowBBSHeader($"{Loc.Get("dungeon.floor", currentDungeonLevel).ToUpper()} - {currentFloor.Theme}");
+        ShowBBSHeader($"{Loc.Get("dungeon.floor", currentDungeonLevel).ToUpper()} - {GetThemeShortName(currentFloor.Theme)}");
 
         // Line 2: Floor stats
         int explored = currentFloor.Rooms.Count(r => r.IsExplored);
@@ -2425,7 +2425,7 @@ public class DungeonLocation : BaseLocation
 
         // Show floor theme
         terminal.SetColor(GetThemeColor(currentFloor.Theme));
-        terminal.Write($"{currentFloor.Theme} | ");
+        terminal.Write($"{GetThemeShortName(currentFloor.Theme)} | ");
 
         // Danger rating
         terminal.SetColor(room.DangerRating >= 3 ? "red" : room.DangerRating >= 2 ? "yellow" : "green");
@@ -2874,6 +2874,22 @@ public class DungeonLocation : BaseLocation
         };
     }
 
+    private static string GetThemeShortName(DungeonTheme theme)
+    {
+        return theme switch
+        {
+            DungeonTheme.Catacombs => Loc.Get("dungeon.theme_short.catacombs"),
+            DungeonTheme.Sewers => Loc.Get("dungeon.theme_short.sewers"),
+            DungeonTheme.Caverns => Loc.Get("dungeon.theme_short.caverns"),
+            DungeonTheme.AncientRuins => Loc.Get("dungeon.theme_short.ancient_ruins"),
+            DungeonTheme.DemonLair => Loc.Get("dungeon.theme_short.demon_lair"),
+            DungeonTheme.FrozenDepths => Loc.Get("dungeon.theme_short.frozen_depths"),
+            DungeonTheme.VolcanicPit => Loc.Get("dungeon.theme_short.volcanic_pit"),
+            DungeonTheme.AbyssalVoid => Loc.Get("dungeon.theme_short.abyssal_void"),
+            _ => theme.ToString()
+        };
+    }
+
     private string GetThemeDescription(DungeonTheme theme)
     {
         return theme switch
@@ -2934,7 +2950,7 @@ public class DungeonLocation : BaseLocation
         WriteBoxHeader($"{Loc.Get("dungeon.dungeon_level", currentDungeonLevel)}", "bright_cyan", 77);
         terminal.WriteLine("");
         terminal.SetColor(GetThemeColor(currentFloor.Theme));
-        terminal.WriteLine($"{Loc.Get("dungeon.theme")}: {currentFloor.Theme}");
+        terminal.WriteLine($"{Loc.Get("dungeon.theme")}: {GetThemeShortName(currentFloor.Theme)}");
         terminal.WriteLine("");
 
         // Floor stats

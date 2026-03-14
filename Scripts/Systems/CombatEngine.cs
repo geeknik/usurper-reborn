@@ -10149,19 +10149,6 @@ public partial class CombatEngine
                 // Skip single target damage since we did AoE
                 actualDamage = 0;
             }
-            else if (abilityResult.SpecialEffect == "aoe_taunt")
-            {
-                // AoE taunt — force all living monsters to attack the taunter
-                int tauntDuration = abilityResult.Duration > 0 ? abilityResult.Duration : 3;
-                foreach (var m in monsters.Where(m => m.IsAlive))
-                {
-                    m.TauntedBy = player.DisplayName;
-                    m.TauntRoundsLeft = tauntDuration;
-                }
-                terminal.SetColor("bright_yellow");
-                terminal.WriteLine(Loc.Get("combat.taunt_aoe"));
-                actualDamage = 0; // Taunt is not a damage ability
-            }
 
             // Critical hit roll for abilities
             bool abilityCrit = StatEffectsSystem.RollCriticalHit(player);
@@ -10366,6 +10353,18 @@ public partial class CombatEngine
                 player.StatusImmunityDuration = abilityResult.Duration > 0 ? abilityResult.Duration : 3;
                 terminal.SetColor("bright_white");
                 terminal.WriteLine(Loc.Get(isPlayer ? "combat.ability_resist_all" : "combat.ability_resist_all_npc", actorName));
+                break;
+
+            case "aoe_taunt":
+                // AoE taunt — force all living monsters to attack the taunter
+                int tauntDuration = abilityResult.Duration > 0 ? abilityResult.Duration : 3;
+                foreach (var m in monsters.Where(m => m.IsAlive))
+                {
+                    m.TauntedBy = player.DisplayName;
+                    m.TauntRoundsLeft = tauntDuration;
+                }
+                terminal.SetColor("bright_yellow");
+                terminal.WriteLine(Loc.Get(isPlayer ? "combat.taunt_aoe" : "combat.taunt_aoe_npc", actorName));
                 break;
 
             // === DAMAGE ENHANCEMENT EFFECTS ===

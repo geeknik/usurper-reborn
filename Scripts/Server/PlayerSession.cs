@@ -110,6 +110,7 @@ public class PlayerSession : IDisposable
         MudServer server,
         CancellationToken cancellationToken,
         bool isPlainText = false,
+        bool isCp437 = false,
         string? forwardedIP = null)
     {
         Username = username;
@@ -121,10 +122,12 @@ public class PlayerSession : IDisposable
         _server = server;
         _serverCancellationToken = cancellationToken;
         _isPlainText = isPlainText;
+        _isCp437 = isCp437;
         _forwardedIP = forwardedIP;
     }
 
     private readonly bool _isPlainText;
+    private readonly bool _isCp437;
     private readonly string? _forwardedIP;
 
     /// <summary>
@@ -159,6 +162,10 @@ public class PlayerSession : IDisposable
             // Screen-reader / plain text mode (e.g. VIP Mud) — strips ANSI art
             if (_isPlainText)
                 ctx.Terminal.IsPlainText = true;
+
+            // CP437 encoding for BBS terminals (SyncTerm, NetRunner, etc.)
+            if (_isCp437)
+                ctx.Terminal.UseCp437 = true;
 
             // ServerEchoes: true only for direct raw-TCP MUD connections (Mudlet, etc.)
             // where we sent IAC WILL ECHO and the client disabled its local echo.

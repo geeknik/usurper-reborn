@@ -679,6 +679,7 @@ namespace UsurperRemake.Systems
                 DefenceBonus = item.Defence,
                 StrengthBonus = item.Strength,
                 DexterityBonus = item.Dexterity,
+                AgilityBonus = item.Agility,
                 WisdomBonus = item.Wisdom,
                 CharismaBonus = item.Charisma,
                 MaxHPBonus = item.HP,
@@ -688,6 +689,25 @@ namespace UsurperRemake.Systems
                 MinLevel = item.MinLevel,
                 Rarity = EquipmentRarity.Common
             };
+
+            // Transfer CON/INT from LootEffects (these stats are stored there, not as direct Item properties)
+            if (item.LootEffects != null)
+            {
+                foreach (var (effectType, value) in item.LootEffects)
+                {
+                    var effect = (LootGenerator.SpecialEffect)effectType;
+                    switch (effect)
+                    {
+                        case LootGenerator.SpecialEffect.Constitution: equipment.ConstitutionBonus += value; break;
+                        case LootGenerator.SpecialEffect.Intelligence: equipment.IntelligenceBonus += value; break;
+                        case LootGenerator.SpecialEffect.AllStats:
+                            equipment.ConstitutionBonus += value;
+                            equipment.IntelligenceBonus += value;
+                            equipment.CharismaBonus += value;
+                            break;
+                    }
+                }
+            }
 
             // Register in database to get an ID
             EquipmentDatabase.RegisterDynamic(equipment);
