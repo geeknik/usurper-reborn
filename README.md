@@ -2,7 +2,7 @@
 
 ## A Persistent Online Text RPG with a Living World
 
-**ALPHA v0.52.5** | **FREE AND OPEN SOURCE** | **GPL v2**
+**ALPHA v0.52.7** | **FREE AND OPEN SOURCE** | **GPL v2**
 
 60+ autonomous NPCs wake up, go to work, visit taverns, fall in love, get married, have children, age, and eventually die of old age — all while you're offline. Log back in, read the news feed, and discover that the blacksmith married the barmaid, the king was assassinated, or a new generation just came of age. The world doesn't wait for you.
 
@@ -261,6 +261,9 @@ For detailed BBS setup instructions, see [DOCS/BBS_DOOR_SETUP.md](DOCS/BBS_DOOR_
 - Additional companion personal quest storylines
 - Expanded faction recruitment ceremonies
 
+### v0.52.7 - Bug Fixes & Quality of Life
+Windows ANSI rendering fix (garbled splash screen in cmd.exe). Companion/NPC equipment stat loss fix (INT, CON, enchantments, proc effects preserved). Inventory backpack pagination. Tank companion AI immediate taunt. Party-wide ambush detection. Group follower full combat menu. Credential "Don't ask again" option. Group commands in help. Accessible launcher terminal priority fix. maxsond credits.
+
 ### v0.52.1 - Guild Board & Boss Fight Audit
 Guild Board on Main Street. Comprehensive city control system overhaul (12 fixes). End-game Old God boss fight party balance with 7 interlocking mechanics (enrage, AoE, channeling, corruption, doom, phase immunity, divine armor). 20+ bug fixes across combat, companions, NPCs, and equipment.
 
@@ -338,7 +341,7 @@ Join our Discord server for discussions, feedback, and updates:
 
 *"You are not a wave fighting the ocean. You ARE the ocean, dreaming of being a wave."*
 
-## Known Issues (Alpha v0.50.7)
+## Known Issues (Alpha v0.52.7)
 - Save files from earlier alpha versions may not be fully compatible
 - BBS FOSSIL mode not supported (use `--stdio` flag for FOSSIL-based BBSes)
 - Steam features only work when game is launched through Steam client
@@ -347,4 +350,4 @@ Join our Discord server for discussions, feedback, and updates:
 
 ---
 
-**Status**: ALPHA v0.50.7 — The world is running. [Watch it live.](https://usurper-reborn.net)
+**Status**: ALPHA v0.52.7 — The world is running. [Watch it live.](https://usurper-reborn.net)

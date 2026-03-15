@@ -639,7 +639,7 @@ namespace UsurperRemake.Systems
 
                     // Offer to save credentials (not in BBS door mode — shared installation)
                     terminal.SetColor("bright_green");
-                    if (UsurperRemake.BBS.DoorMode.IsInDoorMode)
+                    if (UsurperRemake.BBS.DoorMode.IsInDoorMode || ShouldNeverAskToSave())
                     {
                         terminal.WriteLine(Loc.Get("online.authenticated"));
                     }
@@ -653,6 +653,12 @@ namespace UsurperRemake.Systems
                             SaveCredentials(server, port, username!, password!);
                             terminal.SetColor("green");
                             terminal.WriteLine(Loc.Get("online.credentials_saved"));
+                        }
+                        else if (save == "D")
+                        {
+                            SaveNeverAskPreference();
+                            terminal.SetColor("green");
+                            terminal.WriteLine(Loc.Get("online.credentials_never_ask"));
                         }
                     }
                 }
@@ -1386,6 +1392,50 @@ namespace UsurperRemake.Systems
             return null;
         }
 
+        private bool ShouldNeverAskToSave()
+        {
+            try
+            {
+                var path = GetCredentialsPath();
+                if (!File.Exists(path))
+                    return false;
+
+                var json = File.ReadAllText(path);
+                var creds = JsonSerializer.Deserialize<OnlineCredentials>(json);
+                return creds?.NeverAskToSave == true;
+            }
+            catch { return false; }
+        }
+
+        private void SaveNeverAskPreference()
+        {
+            try
+            {
+                var path = GetCredentialsPath();
+                var creds = new OnlineCredentials { NeverAskToSave = true };
+
+                // Preserve existing credentials if they exist
+                if (File.Exists(path))
+                {
+                    var existing = JsonSerializer.Deserialize<OnlineCredentials>(File.ReadAllText(path));
+                    if (existing != null && !string.IsNullOrEmpty(existing.Username))
+                    {
+                        creds.Username = existing.Username;
+                        creds.Password = existing.Password;
+                        creds.Server = existing.Server;
+                        creds.Port = existing.Port;
+                    }
+                }
+
+                var json = JsonSerializer.Serialize(creds, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(path, json);
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Instance.LogWarning("ONLINE_PLAY", $"Failed to save preference: {ex.Message}");
+            }
+        }
+
         private void SaveCredentials(string server, int port, string username, string password)
         {
             try
@@ -1433,6 +1483,7 @@ namespace UsurperRemake.Systems
             public string Server { get; set; } = GameConfig.OnlineServerAddress;
             public int Port { get; set; } = GameConfig.OnlineServerPort;
             public string Username { get; set; } = "";
+            public bool NeverAskToSave { get; set; }
             public string Password
             {
                 get => _password;

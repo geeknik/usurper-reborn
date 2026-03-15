@@ -2145,25 +2145,9 @@ public class TeamCornerLocation : BaseLocation
     /// </summary>
     private Item ConvertEquipmentToItem(Equipment equipment)
     {
-        return new Item
-        {
-            Name = equipment.Name,
-            Type = SlotToObjType(equipment.Slot),
-            Value = equipment.Value,
-            Attack = equipment.WeaponPower,
-            Armor = equipment.ArmorClass,
-            Strength = equipment.StrengthBonus,
-            Dexterity = equipment.DexterityBonus,
-            HP = equipment.MaxHPBonus,
-            Mana = equipment.MaxManaBonus,
-            Defence = equipment.DefenceBonus,
-            IsCursed = equipment.IsCursed,
-            MinLevel = equipment.MinLevel,
-            StrengthNeeded = equipment.StrengthRequired,
-            RequiresGood = equipment.RequiresGood,
-            RequiresEvil = equipment.RequiresEvil,
-            ItemID = equipment.Id
-        };
+        // Delegate to the canonical implementation that preserves LootEffects
+        // (INT, CON, enchantments, proc effects)
+        return currentPlayer.ConvertEquipmentToLegacyItem(equipment);
     }
 
     /// <summary>

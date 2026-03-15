@@ -6293,6 +6293,7 @@ public partial class GameEngine
         terminal.WriteLine(Loc.Get("engine.credits_contributors"));
         terminal.SetColor("cyan");
         terminal.WriteLine(Loc.Get("engine.credits_fastfinge"));
+        terminal.WriteLine(Loc.Get("engine.credits_maxsond"));
         terminal.WriteLine("");
 
         terminal.SetColor("bright_magenta");

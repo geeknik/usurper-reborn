@@ -612,10 +612,20 @@ public partial class CombatEngine
         {
             var ambushRng = new Random();
 
-            // Leader awareness: AGI + DEX (raw base stats) + level*2, plus a d20 roll per monster
-            long leaderAgi = player.BaseAgility;
-            long leaderDex = player.BaseDexterity;
-            long leaderAwareness = leaderAgi / 4 + leaderDex / 4 + player.Level * 2;
+            // Party awareness: use the best AGI + DEX from anyone in the party (leader or teammates)
+            long bestAgi = player.BaseAgility;
+            long bestDex = player.BaseDexterity;
+            int bestLevel = player.Level;
+            if (result.Teammates != null)
+            {
+                foreach (var tm in result.Teammates.Where(t => t.IsAlive))
+                {
+                    if (tm.BaseAgility > bestAgi) bestAgi = tm.BaseAgility;
+                    if (tm.BaseDexterity > bestDex) bestDex = tm.BaseDexterity;
+                    if (tm.Level > bestLevel) bestLevel = tm.Level;
+                }
+            }
+            long leaderAwareness = bestAgi / 4 + bestDex / 4 + bestLevel * 2;
 
             // Roll per monster: monster.Level*3 + d20 vs leaderAwareness + d20
             var ambushingMonsters = monsters
@@ -2121,7 +2131,7 @@ public partial class CombatEngine
     /// <summary>
     /// Display dungeon combat menu in screen reader friendly format (no box-drawing characters)
     /// </summary>
-    private void ShowDungeonCombatMenuScreenReader(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
+    private void ShowDungeonCombatMenuScreenReader(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo, bool isFollower = false)
     {
         terminal.WriteLine("");
         terminal.WriteLine(Loc.Get("combat.dungeon_menu"));
@@ -2180,23 +2190,26 @@ public partial class CombatEngine
 
         // Retreat and auto
         terminal.WriteLine(Loc.Get("combat.menu_retreat"));
-        terminal.WriteLine(Loc.Get("combat.menu_auto"));
-
-        // Combat speed
-        string speedLabel = player.CombatSpeed switch
+        if (!isFollower)
         {
-            CombatSpeed.Instant => Loc.Get("combat.speed_instant"),
-            CombatSpeed.Fast => Loc.Get("combat.speed_fast"),
-            _ => Loc.Get("combat.speed_normal")
-        };
-        terminal.WriteLine(Loc.Get("combat.menu_speed", speedLabel));
+            terminal.WriteLine(Loc.Get("combat.menu_auto"));
+
+            // Combat speed
+            string speedLabel = player.CombatSpeed switch
+            {
+                CombatSpeed.Instant => Loc.Get("combat.speed_instant"),
+                CombatSpeed.Fast => Loc.Get("combat.speed_fast"),
+                _ => Loc.Get("combat.speed_normal")
+            };
+            terminal.WriteLine(Loc.Get("combat.menu_speed", speedLabel));
+        }
         terminal.WriteLine("");
     }
 
     /// <summary>
     /// Display dungeon combat menu with box-drawing characters (standard visual mode)
     /// </summary>
-    private void ShowDungeonCombatMenuStandard(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo)
+    private void ShowDungeonCombatMenuStandard(Character player, bool hasTeammatesNeedingAid, bool canHealAlly, List<(string key, string name, bool available)> classInfo, bool isFollower = false)
     {
         terminal.SetColor("green");
         terminal.WriteLine("╔═══════════════════════════════════════╗");
@@ -2341,29 +2354,32 @@ public partial class CombatEngine
         terminal.SetColor("green");
         terminal.WriteLine("║");
 
-        terminal.Write("║ ");
-        terminal.SetColor("bright_yellow");
-        terminal.Write("[AUTO] ");
-        terminal.SetColor("cyan");
-        terminal.Write($"{Loc.Get("combat.auto_short"),-31}");
-        terminal.SetColor("green");
-        terminal.WriteLine("║");
-
-        // Combat speed option
-        string speedLabel = player.CombatSpeed switch
+        if (!isFollower)
         {
-            CombatSpeed.Instant => Loc.Get("combat.speed_instant"),
-            CombatSpeed.Fast => Loc.Get("combat.speed_fast"),
-            _ => Loc.Get("combat.speed_normal")
-        };
-        terminal.Write("║ ");
-        terminal.SetColor("bright_yellow");
-        terminal.Write("[SPD]  ");
-        terminal.SetColor("darkgray");
-        string spdDesc2 = Loc.Get("combat.speed_label", speedLabel);
-        terminal.Write($"{spdDesc2,-31}");
-        terminal.SetColor("green");
-        terminal.WriteLine("║");
+            terminal.Write("║ ");
+            terminal.SetColor("bright_yellow");
+            terminal.Write("[AUTO] ");
+            terminal.SetColor("cyan");
+            terminal.Write($"{Loc.Get("combat.auto_short"),-31}");
+            terminal.SetColor("green");
+            terminal.WriteLine("║");
+
+            // Combat speed option
+            string speedLabel = player.CombatSpeed switch
+            {
+                CombatSpeed.Instant => Loc.Get("combat.speed_instant"),
+                CombatSpeed.Fast => Loc.Get("combat.speed_fast"),
+                _ => Loc.Get("combat.speed_normal")
+            };
+            terminal.Write("║ ");
+            terminal.SetColor("bright_yellow");
+            terminal.Write("[SPD]  ");
+            terminal.SetColor("darkgray");
+            string spdDesc2 = Loc.Get("combat.speed_label", speedLabel);
+            terminal.Write($"{spdDesc2,-31}");
+            terminal.SetColor("green");
+            terminal.WriteLine("║");
+        }
 
         terminal.WriteLine("╚═══════════════════════════════════════╝");
         terminal.WriteLine("");
@@ -13853,11 +13869,32 @@ public partial class CombatEngine
             if (affordableAbilities.Count == 0) return false;
         }
 
-        // 50% chance to use an ability each round (was 30% — too conservative)
-        if (random.Next(100) >= 50) return false;
-
         // AI: Pick an ability with situational awareness + randomized variety
         ClassAbilitySystem.ClassAbility? chosenAbility = null;
+
+        // PRIORITY 1: Tank role — taunt immediately if no monsters are taunted
+        // Tanks should establish aggro before anything else. This skips the 50% gate.
+        bool isTankClass = teammate.Class == CharacterClass.Warrior || teammate.Class == CharacterClass.Paladin
+            || teammate.Class == CharacterClass.Barbarian;
+        bool isTankCompanion = teammate.IsCompanion && teammate.CompanionId.HasValue &&
+            UsurperRemake.Systems.CompanionSystem.Instance?.GetCompanion(teammate.CompanionId.Value)?.CombatRole == UsurperRemake.Systems.CombatRole.Tank;
+
+        if (isTankClass || isTankCompanion)
+        {
+            bool anyTaunted = livingMonsters.Any(m => !string.IsNullOrEmpty(m.TauntedBy) && m.TauntRoundsLeft > 0);
+            if (!anyTaunted)
+            {
+                // Prefer AoE taunt (Thundering Roar), then single taunt
+                var tauntAbility = affordableAbilities.FirstOrDefault(a => a.SpecialEffect == "aoe_taunt")
+                    ?? affordableAbilities.FirstOrDefault(a => a.SpecialEffect == "taunt");
+                if (tauntAbility != null)
+                    chosenAbility = tauntAbility;
+            }
+        }
+
+        // 50% chance to use an ability each round (was 30% — too conservative)
+        // Skip this gate if we already chose a priority ability above
+        if (chosenAbility == null && random.Next(100) >= 50) return false;
 
         // Categorize available abilities
         var attackAbilities = affordableAbilities
@@ -13868,7 +13905,7 @@ public partial class CombatEngine
             .ToList();
 
         // Situational priority: AoE when many monsters, execute when low HP target
-        if (livingMonsters.Count >= 3)
+        if (chosenAbility == null && livingMonsters.Count >= 3)
         {
             var aoeAbility = attackAbilities.FirstOrDefault(a =>
                 a.SpecialEffect == "aoe" || a.SpecialEffect == "whirlwind" ||
@@ -21452,7 +21489,18 @@ public partial class CombatEngine
             bool canHealAlly = hasTeammatesNeedingAid && (teammate.Healing > 0 || teammate.ManaPotions > 0 ||
                 (ClassAbilitySystem.IsSpellcaster(teammate.Class) && teammate.Mana > 0));
             var classInfo = GetClassSpecificActions(teammate);
-            ShowDungeonCombatMenuBBS(teammate, hasTeammatesNeedingAid, canHealAlly, classInfo, isFollower: true);
+            if (DoorMode.IsInDoorMode || GameConfig.CompactMode)
+            {
+                ShowDungeonCombatMenuBBS(teammate, hasTeammatesNeedingAid, canHealAlly, classInfo, isFollower: true);
+            }
+            else if (teammate.ScreenReaderMode)
+            {
+                ShowDungeonCombatMenuScreenReader(teammate, hasTeammatesNeedingAid, canHealAlly, classInfo, isFollower: true);
+            }
+            else
+            {
+                ShowDungeonCombatMenuStandard(teammate, hasTeammatesNeedingAid, canHealAlly, classInfo, isFollower: true);
+            }
 
             // Show available spells so followers know their C# options
             if (ClassAbilitySystem.IsSpellcaster(teammate.Class) && teammate.Mana > 0)

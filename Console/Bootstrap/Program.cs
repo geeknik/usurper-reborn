@@ -26,6 +26,16 @@ namespace UsurperConsole
         [DllImport("Kernel32")]
         private static extern bool SetConsoleCtrlHandler(ConsoleCtrlHandlerDelegate handler, bool add);
 
+        // Windows API for enabling ANSI escape code processing in cmd.exe/PowerShell
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GetStdHandle(int nStdHandle);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+        private const int STD_OUTPUT_HANDLE = -11;
+        private const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+
         // Console control signal types
         private const int CTRL_C_EVENT = 0;
         private const int CTRL_BREAK_EVENT = 1;
@@ -37,6 +47,12 @@ namespace UsurperConsole
 
         static async Task Main(string[] args)
         {
+            // Enable ANSI escape code processing on Windows cmd.exe/PowerShell.
+            // Without this, raw ANSI sequences (splash screen, ANSI art portraits)
+            // display as garbled text like "[1;31m" instead of rendering colors.
+            // WezTerm handles this natively, but users running the exe directly need it.
+            EnableWindowsAnsiSupport();
+
             // Enable System.Text.Json reflection-based serialization.
             // The trimmer sets IsReflectionEnabledByDefault=false in runtimeconfig,
             // but we use reflection-based JsonSerializer.Deserialize<T>() everywhere.
@@ -494,6 +510,33 @@ namespace UsurperConsole
             );
 
             await service.RunAsync(cts.Token);
+        }
+
+        /// <summary>
+        /// Enable Virtual Terminal Processing on Windows so cmd.exe/PowerShell
+        /// render ANSI escape codes as colors instead of printing them as text.
+        /// Safe no-op on Linux/macOS (terminals support ANSI natively).
+        /// </summary>
+        private static void EnableWindowsAnsiSupport()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return;
+
+            try
+            {
+                var handle = GetStdHandle(STD_OUTPUT_HANDLE);
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+                    return;
+
+                if (GetConsoleMode(handle, out uint mode))
+                {
+                    SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+                }
+            }
+            catch
+            {
+                // Silently fail — worst case, ANSI art looks garbled but game still works
+            }
         }
 
         private static void SetupConsoleCloseHandlers()

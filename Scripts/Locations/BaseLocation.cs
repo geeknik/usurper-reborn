@@ -2578,6 +2578,17 @@ public abstract class BaseLocation
             WriteOnlineCmd("/gc <msg>", "Guild chat");
             WriteOnlineCmd("/gbank <amount>", "Deposit gold to guild");
             WriteOnlineCmd("/ginfo <guild>", "Look up any guild");
+
+            WriteBoxLine(() => { }, 0);
+            var groupCmdsLabel = "  Group Dungeon Commands";
+            WriteBoxLine(() => { terminal.SetColor("white"); terminal.Write(groupCmdsLabel); }, groupCmdsLabel.Length);
+
+            WriteOnlineCmd("/group <player>", "Invite player to dungeon group");
+            WriteOnlineCmd("/leave", "Leave your current group");
+            WriteOnlineCmd("/disband", "Disband the group (leader)");
+            WriteOnlineCmd("/party", "Show group status (in dungeon)");
+            WriteOnlineCmd("/accept", "Accept a group/spectate invite");
+            WriteOnlineCmd("/deny", "Decline a group/spectate invite");
         }
 
         terminal.SetColor("bright_cyan");
@@ -2600,6 +2611,7 @@ public abstract class BaseLocation
         terminal.WriteLine($"/quests or /q {Loc.Get("base.help_quests")}");
         terminal.WriteLine($"/gold or /g {Loc.Get("base.help_gold")}");
         terminal.WriteLine($"/health or /hp {Loc.Get("base.help_health")}");
+        terminal.WriteLine($"/gear or /eq {Loc.Get("base.help_gear")}");
         terminal.WriteLine($"/potion or /pot {Loc.Get("base.help_potion")}");
         terminal.WriteLine($"/herb or /j {Loc.Get("base.help_herb")}");
         terminal.WriteLine($"/materials or /mat {Loc.Get("base.help_materials")}");
@@ -2637,6 +2649,14 @@ public abstract class BaseLocation
             terminal.WriteLine($"/gc <msg> - Guild chat");
             terminal.WriteLine($"/gbank <amount> - Deposit gold to guild");
             terminal.WriteLine($"/ginfo <guild> - Look up any guild");
+            terminal.WriteLine("");
+            terminal.WriteLine("Group Dungeon Commands");
+            terminal.WriteLine("/group <player> - Invite player to dungeon group");
+            terminal.WriteLine("/leave - Leave your current group");
+            terminal.WriteLine("/disband - Disband the group (leader)");
+            terminal.WriteLine("/party - Show group status (in dungeon)");
+            terminal.WriteLine("/accept - Accept a group/spectate invite");
+            terminal.WriteLine("/deny - Decline a group/spectate invite");
         }
 
         terminal.WriteLine("");

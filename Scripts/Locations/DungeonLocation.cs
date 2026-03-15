@@ -668,6 +668,82 @@ public class DungeonLocation : BaseLocation
             // Story milestone events
             await TriggerFloorStoryEvent(player, term);
         }
+
+        // Quest-dependent events that must fire on every entry (not just first visit)
+        // because the quest flag may not exist yet when the floor is first visited
+        await CheckQuestDependentFloorEvents(player, term);
+    }
+
+    /// <summary>
+    /// Floor events that depend on quest state and must re-check on every entry,
+    /// not just the first visit. Handles cases where a player visits a floor before
+    /// having the required quest flag, then returns later with it active.
+    /// </summary>
+    private async Task CheckQuestDependentFloorEvents(Character player, TerminalEmulator term)
+    {
+        switch (currentDungeonLevel)
+        {
+            case 85:
+                // Aurelion save quest return - triggers when entering floor 85 with the Sunforged Blade
+                {
+                    var story85 = StoryProgressionSystem.Instance;
+                    if (story85.OldGodStates.TryGetValue(OldGodType.Aurelion, out var aurelionState) &&
+                        aurelionState.Status == GodStatus.Awakened &&
+                        ArtifactSystem.Instance.HasArtifact(ArtifactType.SunforgedBlade))
+                    {
+                        term.WriteLine("");
+                        term.SetColor("bright_yellow");
+                        term.WriteLine("The corridor blazes with golden light. Aurelion senses the blade's return.");
+                        await Task.Delay(1500);
+                        term.SetColor("bright_cyan");
+                        term.WriteLine("You feel the Sunforged Blade humming in resonance with the God of Light.");
+                        await Task.Delay(1500);
+                        term.WriteLine("");
+
+                        var saveResult = await OldGodBossSystem.Instance.CompleteSaveQuest(player, OldGodType.Aurelion, term);
+                        await HandleGodEncounterResult(saveResult, player, term);
+
+                        if (saveResult.Outcome == BossOutcome.Saved && currentFloor != null)
+                        {
+                            currentFloor.BossDefeated = true;
+                        }
+                    }
+                }
+                break;
+
+            case 90:
+                // Sunforged Blade discovery - triggered by Aurelion's save quest
+                if (StoryProgressionSystem.Instance.HasStoryFlag("aurelion_save_quest") &&
+                    !ArtifactSystem.Instance.HasArtifact(ArtifactType.SunforgedBlade))
+                {
+                    await ShowStoryMoment(term, "The Sunforged Blade",
+                        new[] {
+                            "The chamber ahead burns with a light that has no source.",
+                            "In the center, embedded in a pillar of crystallized sunlight,",
+                            "a blade radiates warmth that pushes back the dungeon's eternal cold.",
+                            "",
+                            "This is Aurelion's light, forged into steel.",
+                            "With this, you can restore what was taken from the God of Light.",
+                        }, "bright_yellow");
+
+                    // Grant the artifact
+                    await ArtifactSystem.Instance.CollectArtifact(player, ArtifactType.SunforgedBlade, term);
+
+                    term.WriteLine("");
+                    term.SetColor("bright_yellow");
+                    term.WriteLine("The blade settles into your hands, warm as a promise.");
+                    term.WriteLine("Return to Aurelion on floor 85 to complete the save quest.", "yellow");
+                }
+                break;
+
+            case 95:
+                // Moral Paradox: Destroy Darkness (requires Sunforged Blade)
+                if (MoralParadoxSystem.Instance.IsParadoxAvailable("destroy_darkness", player))
+                {
+                    await MoralParadoxSystem.Instance.PresentParadox("destroy_darkness", player, term);
+                }
+                break;
+        }
     }
 
     /// <summary>
@@ -905,61 +981,11 @@ public class DungeonLocation : BaseLocation
                 }
                 break;
 
-            case 85:
-                // Aurelion save quest return - triggers when entering floor 85 with the Sunforged Blade
-                {
-                    var story85 = StoryProgressionSystem.Instance;
-                    if (story85.OldGodStates.TryGetValue(OldGodType.Aurelion, out var aurelionState) &&
-                        aurelionState.Status == GodStatus.Awakened &&
-                        ArtifactSystem.Instance.HasArtifact(ArtifactType.SunforgedBlade))
-                    {
-                        term.WriteLine("");
-                        term.SetColor("bright_yellow");
-                        term.WriteLine("The corridor blazes with golden light. Aurelion senses the blade's return.");
-                        await Task.Delay(1500);
-                        term.SetColor("bright_cyan");
-                        term.WriteLine("You feel the Sunforged Blade humming in resonance with the God of Light.");
-                        await Task.Delay(1500);
-                        term.WriteLine("");
-
-                        var saveResult = await OldGodBossSystem.Instance.CompleteSaveQuest(player, OldGodType.Aurelion, term);
-                        await HandleGodEncounterResult(saveResult, player, term);
-
-                        if (saveResult.Outcome == BossOutcome.Saved && currentFloor != null)
-                        {
-                            currentFloor.BossDefeated = true;
-                        }
-                    }
-                }
-                break;
-
-            case 90:
-                // Sunforged Blade discovery - triggered by Aurelion's save quest
-                if (StoryProgressionSystem.Instance.HasStoryFlag("aurelion_save_quest") &&
-                    !ArtifactSystem.Instance.HasArtifact(ArtifactType.SunforgedBlade))
-                {
-                    await ShowStoryMoment(term, "The Sunforged Blade",
-                        new[] {
-                            "The chamber ahead burns with a light that has no source.",
-                            "In the center, embedded in a pillar of crystallized sunlight,",
-                            "a blade radiates warmth that pushes back the dungeon's eternal cold.",
-                            "",
-                            "This is Aurelion's light, forged into steel.",
-                            "With this, you can restore what was taken from the God of Light.",
-                        }, "bright_yellow");
-
-                    // Grant the artifact
-                    await ArtifactSystem.Instance.CollectArtifact(player, ArtifactType.SunforgedBlade, term);
-
-                    term.WriteLine("");
-                    term.SetColor("bright_yellow");
-                    term.WriteLine("The blade settles into your hands, warm as a promise.");
-                    term.WriteLine("Return to Aurelion on floor 85 to complete the save quest.", "yellow");
-                }
-                break;
+            // Cases 85 and 90 moved to CheckQuestDependentFloorEvents() — they depend on
+            // quest state that may not exist on first visit (aurelion_save_quest flag)
 
             case 95:
-                // Moral Paradox: Destroy Darkness (requires Sunforged Blade)
+                // Moral Paradox story text (first-visit only); actual paradox check is in CheckQuestDependentFloorEvents
                 if (MoralParadoxSystem.Instance.IsParadoxAvailable("destroy_darkness", player))
                 {
                     await ShowStoryMoment(term, Loc.Get("dungeon.story_purging_title"),

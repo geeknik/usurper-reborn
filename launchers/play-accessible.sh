@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 chmod +x UsurperReborn 2>/dev/null
 
 # Fall back to common Linux terminal emulators
-for term_cmd in xterm gnome-terminal konsole xfce4-terminal mate-terminal lxterminal alacritty kitty; do
+for term_cmd in gnome-terminal konsole xfce4-terminal mate-terminal lxterminal alacritty kitty xterm; do
     if command -v "$term_cmd" >/dev/null 2>&1; then
         case "$term_cmd" in
             gnome-terminal) exec gnome-terminal -- ./UsurperReborn --local --screen-reader ;;

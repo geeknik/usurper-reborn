@@ -778,6 +778,7 @@ namespace UsurperRemake.Systems
                 ("", "white"),
                 (Loc.Get("ending.credits_contributors"), "bright_yellow"),
                 (Loc.Get("ending.credits_contributor_1"), "white"),
+                (Loc.Get("ending.credits_contributor_3"), "white"),
                 (Loc.Get("ending.credits_contributor_2"), "white"),
                 ("", "white"),
                 (Loc.Get("ending.credits_alpha_testers"), "bright_yellow"),

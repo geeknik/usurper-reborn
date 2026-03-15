@@ -4635,35 +4635,9 @@ toResurrect.IsDead = false;
     /// </summary>
     private ModelItem ConvertEquipmentToItem(Equipment equipment)
     {
-        var item = new ModelItem
-        {
-            Name = equipment.Name,
-            Type = SlotToObjType(equipment.Slot),
-            Value = equipment.Value,
-            Attack = equipment.WeaponPower,
-            Armor = equipment.ArmorClass,
-            Strength = equipment.StrengthBonus,
-            Dexterity = equipment.DexterityBonus,
-            Wisdom = equipment.WisdomBonus,
-            Charisma = equipment.CharismaBonus,
-            HP = equipment.MaxHPBonus,
-            Mana = equipment.MaxManaBonus,
-            Defence = equipment.DefenceBonus,
-            IsCursed = equipment.IsCursed,
-            MinLevel = equipment.MinLevel,
-            StrengthNeeded = equipment.StrengthRequired,
-            RequiresGood = equipment.RequiresGood,
-            RequiresEvil = equipment.RequiresEvil,
-            ItemID = equipment.Id
-        };
-
-        // Preserve CON/INT in LootEffects for re-equip
-        if (equipment.ConstitutionBonus != 0)
-            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Constitution, equipment.ConstitutionBonus));
-        if (equipment.IntelligenceBonus != 0)
-            item.LootEffects.Add(((int)LootGenerator.SpecialEffect.Intelligence, equipment.IntelligenceBonus));
-
-        return item;
+        // Delegate to the canonical implementation that preserves LootEffects
+        // (INT, CON, enchantments, proc effects)
+        return currentPlayer.ConvertEquipmentToLegacyItem(equipment);
     }
 
     /// <summary>
