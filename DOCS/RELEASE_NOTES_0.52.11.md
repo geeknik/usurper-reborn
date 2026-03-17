@@ -163,6 +163,10 @@ Comprehensive audit and fix pass across all romance/relationship subsystems (Rom
 - **ConfessionAccepted never set**: The `HasConfessed` and `ConfessionAccepted` flags on `ConversationState` were serialized but never written — confessions couldn't progress the relationship pipeline properly. Now sets `HasConfessed = true` after any confession attempt and `ConfessionAccepted = true` on success.
 - **PregnancyFatherName not cleared on permadeath**: The permadeath path in `WorldSimulator.MarkNPCDead()` cleared HP and set `IsDead` but left pregnancy data intact, meaning dead NPCs could still "give birth" during world sim ticks. Now clears both `PregnancyDueDate` and `PregnancyFatherName` on permadeath.
 
+## Shield Loot Type Fix (by maxsond)
+
+Dungeon-dropped shields were being misclassified — the `GenerateShield()` method determined shield type (Buckler/Shield/Tower Shield) by the item's position in a filtered candidate list, not by its actual name. When level filtering narrowed the list, a Tower Shield at index 3 would be classified as a "Buckler" because the code assumed indices 0-8 were always bucklers. Replaced with `ShopItemGenerator.InferShieldType()` which checks the item name (already used by the shop system). Three buckler-section templates ("Reinforced Shield", "Forged Shield", "Runed Shield") renamed to include "Buckler" so `InferShieldType()` classifies them correctly. Added missing localization keys for shield stat display in loot drops (`combat.loot_shield_bonus`, `combat.loot_block_chance`) in all 4 languages.
+
 ## Armor Damage Variance Tightened
 
 Armor power (ArmPow) damage reduction was wildly inconsistent — each hit randomly applied 0-100% of your armor value, meaning identical attacks could deal vastly different damage. Tightened to 75-100% of armor value, making defense feel more reliable without being completely deterministic.
@@ -195,7 +199,7 @@ At Level 100 with STR 50, a Warrior ability now deals ~1,350 damage (was ~1,008)
 - `Scripts/Systems/NPCPetitionSystem.cs` — All 6 petition types (betrayal, romance, custody, royal, dying wish, rivalry) converted from hardcoded English to `Loc.Get("petition.*")` keys
 - `Scripts/Core/Child.cs` — `LastParentingDay` property for per-child interaction cooldown; `GetSoulDescription()` rebalanced ranges with "mischievous" and "virtuous" tiers; `CreateChild()` birth alignment inheritance from parent Chivalry/Darkness; all `new Random()` → `Random.Shared`
 - `Scripts/Systems/FamilySystem.cs` — `ParentingScenario`, `ParentingChoice`, `ChildAgeGroup` types; `ParentingScenarios` static class with 24 scenarios (8 per age group); `GetRandomScenario()` and `CalculateAlignmentModifier()` methods; `SerializeChildren()`/`DeserializeChildren()` include `LastParentingDay`; all `new Random()` → `Random.Shared`
-- `Scripts/Systems/LootGenerator.cs` — `GetEffectKey()` two-pass regex fix for PascalCase-to-snake_case conversion (MaxHP → max_hp, not max_h_p); class-weighted elemental effect rolls via `GetThematicWeights()` and `WeightedSelect()`; "Ranger's Cloak" body armor renamed to "Ranger's Leather"
+- `Scripts/Systems/LootGenerator.cs` — `GetEffectKey()` two-pass regex fix for PascalCase-to-snake_case conversion (MaxHP → max_hp, not max_h_p); class-weighted elemental effect rolls via `GetThematicWeights()` and `WeightedSelect()`; "Ranger's Cloak" body armor renamed to "Ranger's Leather"; `GenerateShield()` uses `InferShieldType()` instead of fragile index-based type classification (by maxsond); 3 buckler templates renamed to include "Buckler" for correct inference
 - `Scripts/Locations/HomeLocation.cs` — `[C] Spend Time with Child` menu option in visual and BBS menus; `InteractWithChild()` method with child selection, cooldown check, scenario display, choice handling, alignment modifier, soul change display
 - `Scripts/Locations/QuestHallLocation.cs` — Removed FindArtifact hint
 - `Scripts/Systems/SaveDataStructures.cs` — `LastParentingDay` field added to `ChildData`
@@ -220,7 +224,7 @@ At Level 100 with STR 50, a Warrior ability now deals ~1,350 damage (was ~1,008)
 - `Scripts/Locations/BaseLocation.cs` — Paladin Divine Resolve passive display in `/health` Active Buffs
 - `Scripts/Locations/ChurchLocation.cs` — Marriage candidate list checks RomanceTracker lovers; RelationshipSystem sync before PerformMarriage
 - `Scripts/Locations/CastleLocation.cs` — Royal divorce calls `RelationshipSystem.ProcessDivorce()` before `RomanceTracker.Divorce()`
-- `Localization/en.json` — ~547 new keys (seals, quests, npc_story, petition) + ~179 new parenting keys; `->` arrow fix
-- `Localization/es.json` — Spanish translations for all new keys; `->` arrow fix
-- `Localization/hu.json` — Hungarian translations for all new keys; `->` arrow fix
-- `Localization/it.json` — Italian translations for all new keys; `->` arrow fix
+- `Localization/en.json` — ~547 new keys (seals, quests, npc_story, petition) + ~179 new parenting keys; `->` arrow fix; shield loot display keys (by maxsond)
+- `Localization/es.json` — Spanish translations for all new keys; `->` arrow fix; shield loot display keys (by maxsond)
+- `Localization/hu.json` — Hungarian translations for all new keys; `->` arrow fix; shield loot display keys (by maxsond)
+- `Localization/it.json` — Italian translations for all new keys; `->` arrow fix; shield loot display keys (by maxsond)
