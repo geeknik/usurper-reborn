@@ -797,15 +797,17 @@ function getStats() {
              COALESCE(op.connection_type, 'Unknown') as connection_type,
              json_extract(p.player_data, '$.player.isImmortal') as is_immortal,
              json_extract(p.player_data, '$.player.divineName') as divine_name,
-             json_extract(p.player_data, '$.player.godLevel') as god_level
+             json_extract(p.player_data, '$.player.godLevel') as god_level,
+             json_extract(p.player_data, '$.player.nobleTitle') as noble_title
       FROM online_players op
       LEFT JOIN players p ON LOWER(op.username) = LOWER(p.username)
       WHERE op.last_heartbeat >= datetime('now', '-120 seconds')
       ORDER BY op.display_name
     `).all().map(row => {
       const isImmortal = row.is_immortal === 1 || row.is_immortal === true;
+      const rawName = row.display_name || row.username;
       return {
-        name: row.display_name || row.username,
+        name: row.noble_title ? `${row.noble_title} ${rawName}` : rawName,
         level: isImmortal ? (row.god_level || 1) : (row.level || 1),
         className: isImmortal ? 'Immortal' : (CLASS_NAMES[row.class_id] || 'Unknown'),
         location: row.location || 'Unknown',
@@ -976,7 +978,8 @@ function getStats() {
           json_extract(p.player_data, '$.player.level') as level,
           json_extract(p.player_data, '$.player.class') as class_id,
           json_extract(p.player_data, '$.player.experience') as xp,
-          CASE WHEN op.username IS NOT NULL THEN 1 ELSE 0 END as is_online
+          CASE WHEN op.username IS NOT NULL THEN 1 ELSE 0 END as is_online,
+          json_extract(p.player_data, '$.player.nobleTitle') as noble_title
         FROM players p
         LEFT JOIN online_players op ON LOWER(p.username) = LOWER(op.username)
           AND op.last_heartbeat >= datetime('now', '-120 seconds')
@@ -992,7 +995,7 @@ function getStats() {
         LIMIT 25
       `).all().map((row, idx) => ({
         rank: idx + 1,
-        name: row.display_name,
+        name: row.noble_title ? `${row.noble_title} ${row.display_name}` : row.display_name,
         level: row.level || 1,
         className: CLASS_NAMES[row.class_id] || 'Unknown',
         experience: row.xp || 0,
@@ -2248,7 +2251,10 @@ async function handleAdminRequest(req, res) {
           isMuted: p.isMuted || false,
         },
         statistics: p.statistics || {},
-        equipment: p.equipment || {},
+        equipment: {
+          equippedItems: p.equippedItems || {},
+          dynamicEquipment: p.dynamicEquipment || [],
+        },
         inventory: p.inventory || [],
         spells: p.spells || [],
         abilities: p.abilities || [],

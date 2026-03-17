@@ -193,6 +193,7 @@ namespace UsurperRemake.Systems
         public int ClassId { get; set; }
         public long Experience { get; set; }
         public bool IsOnline { get; set; }
+        public string? NobleTitle { get; set; }
     }
 
     /// <summary>

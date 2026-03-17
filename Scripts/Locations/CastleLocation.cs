@@ -5423,7 +5423,7 @@ public class CastleLocation : BaseLocation
     }
 
     /// <summary>
-    /// Request knighthood/title from the king
+    /// Request knighthood/title from the king — cinematic ceremony with server broadcast
     /// </summary>
     private async Task AudienceRequestKnighthood()
     {
@@ -5433,17 +5433,11 @@ public class CastleLocation : BaseLocation
 
         // Check requirements
         bool hasChivalry = currentPlayer.Chivalry >= 200;
-        bool hasFame = currentPlayer.Fame >= 100;
-        bool hasLevel = currentPlayer.Level >= 10;
+        bool hasFame = currentPlayer.Fame >= 150;
+        bool hasLevel = currentPlayer.Level >= 15;
         bool notEvil = currentPlayer.Darkness < currentPlayer.Chivalry;
 
-        // Check if already knighted (using a title marker)
-        bool alreadyKnighted = currentPlayer.NobleTitle?.Contains("Sir") == true ||
-                               currentPlayer.NobleTitle?.Contains("Dame") == true ||
-                               currentPlayer.NobleTitle?.Contains("Lord") == true ||
-                               currentPlayer.NobleTitle?.Contains("Lady") == true;
-
-        if (alreadyKnighted)
+        if (currentPlayer.IsKnighted)
         {
             terminal.SetColor("cyan");
             terminal.WriteLine(Loc.Get("castle.knight_smiles", currentKing.GetTitle(), currentKing.Name));
@@ -5459,42 +5453,141 @@ public class CastleLocation : BaseLocation
             terminal.SetColor("gray");
             terminal.WriteLine(Loc.Get("castle.knight_requirements"));
             terminal.WriteLine(Loc.Get("castle.knight_req_chivalry", hasChivalry ? Loc.Get("ui.yes") : $"{Loc.Get("ui.no")} ({currentPlayer.Chivalry}/200)"));
-            terminal.WriteLine(Loc.Get("castle.knight_req_fame", hasFame ? Loc.Get("ui.yes") : $"{Loc.Get("ui.no")} ({currentPlayer.Fame}/100)"));
-            terminal.WriteLine(Loc.Get("castle.knight_req_level", hasLevel ? Loc.Get("ui.yes") : $"{Loc.Get("ui.no")} ({currentPlayer.Level}/10)"));
+            terminal.WriteLine(Loc.Get("castle.knight_req_fame", hasFame ? Loc.Get("ui.yes") : $"{Loc.Get("ui.no")} ({currentPlayer.Fame}/150)"));
+            terminal.WriteLine(Loc.Get("castle.knight_req_level", hasLevel ? Loc.Get("ui.yes") : $"{Loc.Get("ui.no")} ({currentPlayer.Level}/15)"));
             terminal.WriteLine(Loc.Get("castle.knight_req_honorable", notEvil ? Loc.Get("ui.yes") : Loc.Get("ui.no")));
         }
         else
         {
-            terminal.SetColor("bright_green");
-            terminal.WriteLine(Loc.Get("castle.knight_rises", currentKing.GetTitle(), currentKing.Name));
-            terminal.WriteLine("");
-            terminal.SetColor("bright_yellow");
-            terminal.WriteLine(Loc.Get("castle.knight_kneel"));
-            terminal.WriteLine("");
+            // === CINEMATIC KNIGHTING CEREMONY ===
+            terminal.ClearScreen();
 
+            // Scene 1: The throne room falls silent
+            terminal.SetColor("gray");
+            terminal.WriteLine("  The throne room falls silent as the court herald raises his hand.");
+            terminal.WriteLine("");
             await Task.Delay(1500);
+
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine($"  \"All rise for {currentKing.GetTitle()} {currentKing.Name}!\"");
+            terminal.WriteLine("");
+            await Task.Delay(1500);
+
+            // Scene 2: The king addresses the court
+            terminal.SetColor("gray");
+            terminal.WriteLine("  The assembled nobles and courtiers turn their gaze toward you.");
+            terminal.WriteLine("  Torchlight dances across the stone walls of the great hall.");
+            terminal.WriteLine("");
+            await Task.Delay(2000);
+
+            terminal.SetColor("bright_cyan");
+            terminal.WriteLine($"  {currentKing.GetTitle()} {currentKing.Name} rises from the throne and speaks:");
+            terminal.WriteLine("");
+            await Task.Delay(1000);
+
+            terminal.SetColor("white");
+            terminal.WriteLine($"  \"We have watched {currentPlayer.DisplayName} prove their valor");
+            terminal.WriteLine("   through countless battles, acts of honor, and service to the realm.\"");
+            terminal.WriteLine("");
+            await Task.Delay(2000);
+
+            // Scene 3: Approach the throne
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  \"Step forward and kneel before the throne.\"");
+            terminal.WriteLine("");
+            await Task.Delay(1500);
+
+            terminal.SetColor("gray");
+            terminal.WriteLine("  Your footsteps echo through the silent hall as you approach.");
+            terminal.WriteLine("  You kneel on the cold stone before the throne.");
+            terminal.WriteLine("");
+            await terminal.PressAnyKey();
+
+            // Scene 4: The dubbing
+            terminal.ClearScreen();
+            terminal.SetColor("gray");
+            terminal.WriteLine("");
+            terminal.WriteLine("  The king draws the ceremonial blade — an ancient sword that has");
+            terminal.WriteLine("  touched the shoulders of every knight in the realm's history.");
+            terminal.WriteLine("");
+            await Task.Delay(2000);
 
             string title = currentPlayer.Sex == CharacterSex.Male ? "Sir" : "Dame";
             currentPlayer.NobleTitle = title;
 
             terminal.SetColor("bright_cyan");
-            terminal.WriteLine(Loc.Get("castle.knight_draws_sword", currentKing.GetTitle()));
+            terminal.WriteLine("  The blade touches your right shoulder...");
             terminal.WriteLine("");
-            terminal.WriteLine(Loc.Get("castle.knight_by_power"));
-            terminal.WriteLine(Loc.Get("castle.knight_dub_thee", title, currentPlayer.DisplayName));
+            await Task.Delay(1500);
+
+            terminal.SetColor("white");
+            terminal.WriteLine("  \"By the authority vested in me as sovereign of this realm...\"");
             terminal.WriteLine("");
-            terminal.WriteLine(Loc.Get("castle.knight_rise"));
+            await Task.Delay(1500);
+
+            terminal.SetColor("bright_cyan");
+            terminal.WriteLine("  The blade crosses to your left shoulder...");
             terminal.WriteLine("");
+            await Task.Delay(1500);
+
+            terminal.SetColor("white");
+            terminal.WriteLine("  \"For your valor in battle, your honor in deed,");
+            terminal.WriteLine("   and your unwavering service to the people of this land...\"");
+            terminal.WriteLine("");
+            await Task.Delay(2000);
+
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine($"  \"I dub thee {title} {currentPlayer.DisplayName},");
+            terminal.WriteLine("   Knight of the Realm!\"");
+            terminal.WriteLine("");
+            await Task.Delay(1500);
+
+            // Scene 5: Rise
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  \"Rise, {title} {currentPlayer.DisplayName}. You are now a Knight of the Realm.\"");
+            terminal.WriteLine("");
+            await Task.Delay(1000);
+
+            terminal.SetColor("gray");
+            terminal.WriteLine("  The court erupts in applause. Nobles bow their heads in recognition.");
+            terminal.WriteLine("  The herald announces your new title to all present.");
+            terminal.WriteLine("");
+            await Task.Delay(1500);
 
             // Bonuses for knighthood
             currentPlayer.Chivalry += 50;
             currentPlayer.Fame += 25;
 
+            // Show benefits
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  ══════════════════════════════════════════");
+            terminal.WriteLine($"   You are now {title} {currentPlayer.DisplayName}!");
+            terminal.WriteLine("  ══════════════════════════════════════════");
             terminal.SetColor("bright_green");
-            terminal.WriteLine(Loc.Get("castle.knight_you_are_now", title, currentPlayer.DisplayName));
-            terminal.WriteLine(Loc.Get("castle.knight_bonus"));
+            terminal.WriteLine($"   +{(int)(GameConfig.KnightDamageBonus * 100)}% damage in combat (permanent)");
+            terminal.WriteLine($"   +{(int)(GameConfig.KnightDefenseBonus * 100)}% defense in combat (permanent)");
+            terminal.WriteLine("   +50 Chivalry");
+            terminal.WriteLine("   +25 Fame");
+            terminal.WriteLine("   Knight title shown in Who's Online");
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine("  ══════════════════════════════════════════");
 
-            NewsSystem.Instance?.Newsy(true, $"{currentPlayer.DisplayName} was knighted by {currentKing.GetTitle()} {currentKing.Name}!");
+            // News and broadcast
+            string knightNews = $"{title} {currentPlayer.DisplayName} was knighted by {currentKing.GetTitle()} {currentKing.Name}!";
+            NewsSystem.Instance?.Newsy(true, knightNews);
+
+            // Server-wide broadcast for online mode
+            if (UsurperRemake.BBS.DoorMode.IsOnlineMode)
+            {
+                var mudServer = UsurperRemake.Server.MudServer.Instance;
+                if (mudServer != null)
+                {
+                    mudServer.BroadcastToAll(
+                        $"\u001b[1;33m  *** {title} {currentPlayer.DisplayName} has been knighted by {currentKing.GetTitle()} {currentKing.Name}! ***\u001b[0m",
+                        currentPlayer.DisplayName.ToLowerInvariant()
+                    );
+                }
+            }
         }
 
         terminal.WriteLine("");

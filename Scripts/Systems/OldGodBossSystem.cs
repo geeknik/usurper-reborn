@@ -1097,6 +1097,9 @@ namespace UsurperRemake.Systems
             player.Gold += goldReward;
             terminal.WriteLine(Loc.Get("old_god.defeated_gold", $"{goldReward:N0}"), "yellow");
 
+            // Fame from defeating an Old God
+            player.Fame += 50;
+
             OnBossDefeated?.Invoke(boss.Type);
 
             // Queue Stranger encounter after first Old God

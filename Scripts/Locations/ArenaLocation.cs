@@ -356,6 +356,9 @@ public class ArenaLocation : BaseLocation
             // Claim any bounties on the defeated player
             long bountyReward = await backend.ClaimBounties(defenderUsername, myUsername);
 
+            // Fame from PvP victory
+            currentPlayer.Fame += 10;
+
             // Display victory
             terminal.WriteLine("");
             terminal.SetColor("bright_green");
@@ -400,6 +403,9 @@ public class ArenaLocation : BaseLocation
             currentPlayer.HP = Math.Max(1, currentPlayer.MaxHP / 2);
             currentPlayer.Poison = 0;
             currentPlayer.PoisonTurns = 0;
+
+            // Fame loss from PvP defeat
+            currentPlayer.Fame = Math.Max(0, currentPlayer.Fame - 5);
 
             terminal.WriteLine("");
             terminal.SetColor("bright_red");

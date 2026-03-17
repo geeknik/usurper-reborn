@@ -1129,7 +1129,7 @@ public class MainStreetLocation : BaseLocation
                 }
                 else
                 {
-                    terminal.WriteLine("  Guilds are only available in online mode.", "gray");
+                    terminal.WriteLine($"  {Loc.Get("guild.online_only")}", "gray");
                 }
                 return false;
 
@@ -1278,7 +1278,8 @@ public class MainStreetLocation : BaseLocation
         var allCharacters = new List<(string Name, int Level, string Class, long Experience, string Location, bool IsPlayer, bool IsAlive)>();
 
         // Add player
-        allCharacters.Add((currentPlayer.DisplayName, currentPlayer.Level, currentPlayer.Class.ToString(), currentPlayer.Experience, "Main Street", true, currentPlayer.IsAlive));
+        string playerFameName = currentPlayer.IsKnighted ? $"{currentPlayer.NobleTitle} {currentPlayer.DisplayName}" : currentPlayer.DisplayName;
+        allCharacters.Add((playerFameName, currentPlayer.Level, currentPlayer.Class.ToString(), currentPlayer.Experience, "Main Street", true, currentPlayer.IsAlive));
 
         // Add other online players from the database
         if (UsurperRemake.Systems.OnlineStateManager.IsActive)
@@ -1294,7 +1295,8 @@ public class MainStreetLocation : BaseLocation
 
                     string className = ((CharacterClass)op.ClassId).ToString();
                     string onlineTag = op.IsOnline ? "[ON]" : "";
-                    allCharacters.Add((op.DisplayName, op.Level, className, op.Experience, onlineTag, false, true));
+                    string fameDisplayName = !string.IsNullOrEmpty(op.NobleTitle) ? $"{op.NobleTitle} {op.DisplayName}" : op.DisplayName;
+                    allCharacters.Add((fameDisplayName, op.Level, className, op.Experience, onlineTag, false, true));
                 }
             }
             catch { /* If DB query fails, just show NPCs */ }
@@ -1438,7 +1440,8 @@ public class MainStreetLocation : BaseLocation
             WriteSectionHeader(Loc.Get("main_street.section_players"), "bright_green");
             terminal.SetColor("yellow");
             string playerSex = currentPlayer.Sex == CharacterSex.Male ? "M" : "F";
-            terminal.WriteLine($"  * {currentPlayer.DisplayName,-18} {playerSex} Lv{currentPlayer.Level,3} {currentPlayer.Class,-10} HP:{currentPlayer.HP}/{currentPlayer.MaxHP} {Loc.Get("main_street.citizens_you_tag")}");
+            string citizenName = currentPlayer.IsKnighted ? $"{currentPlayer.NobleTitle} {currentPlayer.DisplayName}" : currentPlayer.DisplayName;
+            terminal.WriteLine($"  * {citizenName,-18} {playerSex} Lv{currentPlayer.Level,3} {currentPlayer.Class,-10} HP:{currentPlayer.HP}/{currentPlayer.MaxHP} {Loc.Get("main_street.citizens_you_tag")}");
             terminal.WriteLine("");
 
             if (!viewingDead)
@@ -3113,24 +3116,29 @@ public class MainStreetLocation : BaseLocation
         terminal.SetColor("white");
         terminal.WriteLine($"  {awakeningDesc}");
         terminal.WriteLine("");
-        string griefStatus = grief.CurrentStage switch
+        // Show per-companion grief details
+        var griefDetails = grief.GetActiveGriefDetails();
+        if (griefDetails.Count > 0)
         {
-            GriefStage.None => Loc.Get("main_street.grief_none"),
-            GriefStage.Denial => Loc.Get("main_street.grief_denial"),
-            GriefStage.Anger => Loc.Get("main_street.grief_anger"),
-            GriefStage.Bargaining => Loc.Get("main_street.grief_bargaining"),
-            GriefStage.Depression => Loc.Get("main_street.grief_depression"),
-            GriefStage.Acceptance => Loc.Get("main_street.grief_acceptance"),
-            _ => Loc.Get("main_street.awakening_unknown")
-        };
+            terminal.SetColor("dark_magenta");
+            terminal.WriteLine($"  {Loc.Get("grief.health_grieving", griefDetails.Count)}");
+            foreach (var (name, stage) in griefDetails)
+            {
+                string stageLabel = stage switch
+                {
+                    GriefStage.Denial => Loc.Get("grief.health_stage_denial"),
+                    GriefStage.Anger => Loc.Get("grief.health_stage_anger"),
+                    GriefStage.Bargaining => Loc.Get("grief.health_stage_bargaining"),
+                    GriefStage.Depression => Loc.Get("grief.health_stage_depression"),
+                    GriefStage.Acceptance => Loc.Get("grief.health_stage_acceptance"),
+                    _ => Loc.Get("grief.health_stage_unknown")
+                };
+                terminal.SetColor("yellow");
+                terminal.Write($"    {name}: ");
+                terminal.SetColor(stage == GriefStage.Acceptance ? "bright_green" : "dark_magenta");
+                terminal.WriteLine(stageLabel);
+            }
 
-        string griefColor = grief.CurrentStage == GriefStage.None || grief.CurrentStage == GriefStage.Acceptance
-            ? "bright_green"
-            : "yellow";
-        terminal.SetColor(griefColor);
-        terminal.WriteLine($"  {Loc.Get("main_street.grief_label")} {griefStatus}");
-        if (grief.IsGrieving)
-        {
             var griefFx = grief.GetCurrentEffects();
             var parts = new List<string>();
             if (griefFx.DamageModifier != 0)
@@ -3148,11 +3156,17 @@ public class MainStreetLocation : BaseLocation
                 terminal.SetColor("gray");
                 terminal.WriteLine(Loc.Get("main_street.grief_combat_effects", string.Join(", ", parts)));
             }
-            if (!string.IsNullOrEmpty(griefFx.Description))
+        }
+        else
+        {
+            string griefStatus = grief.CurrentStage switch
             {
-                terminal.SetColor("dark_magenta");
-                terminal.WriteLine($"    {griefFx.Description}");
-            }
+                GriefStage.None => Loc.Get("main_street.grief_none"),
+                GriefStage.Acceptance => Loc.Get("main_street.grief_acceptance"),
+                _ => Loc.Get("main_street.awakening_unknown")
+            };
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {Loc.Get("main_street.grief_label")} {griefStatus}");
         }
         terminal.WriteLine("");
 
@@ -3360,23 +3374,24 @@ public class MainStreetLocation : BaseLocation
         var guild = GuildSystem.Instance;
         if (guild == null)
         {
-            terminal.WriteLine("  Guilds are only available in online mode.", "yellow");
+            terminal.WriteLine($"  {Loc.Get("guild.online_only")}", "yellow");
             await terminal.PressAnyKey();
             return;
         }
 
         terminal.WriteLine("");
+        string boardTitle = Loc.Get("guild.board_title");
         if (!IsScreenReader)
         {
             terminal.SetColor("bright_yellow");
             terminal.WriteLine("  ╔══════════════════════════════════════════════════╗");
-            terminal.WriteLine("  ║              GUILD BOARD                        ║");
+            terminal.WriteLine($"  ║              {boardTitle,-36}║");
             terminal.WriteLine("  ╠══════════════════════════════════════════════════╣");
         }
         else
         {
             terminal.SetColor("bright_yellow");
-            terminal.WriteLine("  --- GUILD BOARD ---");
+            terminal.WriteLine($"  --- {boardTitle} ---");
         }
 
         // Get all guilds
@@ -3385,29 +3400,30 @@ public class MainStreetLocation : BaseLocation
         if (allGuilds.Count == 0)
         {
             terminal.SetColor("gray");
-            terminal.WriteLine("  No guilds have been founded yet.");
-            terminal.WriteLine("  Be the first! Use /gcreate <name> to start a guild (10,000 gold).");
+            terminal.WriteLine($"  {Loc.Get("guild.board_no_guilds")}");
+            terminal.WriteLine($"  {Loc.Get("guild.board_hint_create")}");
         }
         else
         {
             // Guild rankings
             terminal.SetColor("bright_cyan");
-            terminal.WriteLine($"  {"Rank",-5} {"Guild",-22} {"Members",-9} {"Leader",-16} {"Bank",8}");
+            terminal.WriteLine($"  {Loc.Get("guild.board_col_rank"),-5} {Loc.Get("guild.board_col_guild"),-22} {Loc.Get("guild.board_col_members"),-9} {Loc.Get("guild.board_col_leader"),-16} {Loc.Get("guild.board_col_bank"),8}");
             terminal.SetColor("gray");
             terminal.WriteLine("  " + new string('-', 62));
 
             int rank = 1;
             foreach (var g in allGuilds.Take(10))
             {
-                // Check online members
-                var onlineMembers = guild.GetOnlineGuildMembers(g.DisplayName);
+                // Check online members (use Name key, not DisplayName)
+                var onlineMembers = guild.GetOnlineGuildMembers(g.Name);
                 string memberStr = onlineMembers.Count > 0
-                    ? $"{g.MemberCount} ({onlineMembers.Count} on)"
+                    ? Loc.Get("guild.board_online_suffix", g.MemberCount, onlineMembers.Count)
                     : $"{g.MemberCount}";
 
                 // Truncate names for display
                 string guildName = g.DisplayName.Length > 20 ? g.DisplayName[..20] + ".." : g.DisplayName;
-                string leaderDisplay = g.LeaderUsername.Length > 14 ? g.LeaderUsername[..14] + ".." : g.LeaderUsername;
+                string leaderName = !string.IsNullOrEmpty(g.LeaderDisplayName) ? g.LeaderDisplayName : g.LeaderUsername;
+                string leaderDisplay = leaderName.Length > 14 ? leaderName[..14] + ".." : leaderName;
 
                 // Color based on rank
                 string color = rank == 1 ? "bright_yellow" : rank <= 3 ? "bright_cyan" : "white";
@@ -3419,7 +3435,7 @@ public class MainStreetLocation : BaseLocation
             if (allGuilds.Count > 10)
             {
                 terminal.SetColor("gray");
-                terminal.WriteLine($"  ... and {allGuilds.Count - 10} more guild{(allGuilds.Count - 10 != 1 ? "s" : "")}");
+                terminal.WriteLine($"  {Loc.Get("guild.board_more_guilds", allGuilds.Count - 10)}");
             }
         }
 
@@ -3432,10 +3448,10 @@ public class MainStreetLocation : BaseLocation
             if (info != null)
             {
                 terminal.SetColor("bright_green");
-                terminal.WriteLine($"  Your Guild: {info.DisplayName}");
+                terminal.WriteLine($"  {Loc.Get("guild.board_your_guild", info.DisplayName)}");
                 terminal.SetColor("white");
                 double bonus = Math.Min(info.MemberCount * GuildSystem.GuildXPBonusPerMember, GuildSystem.MaxGuildXPBonus) * 100;
-                terminal.WriteLine($"  Members: {info.MemberCount}/{GuildSystem.MaxGuildMembers}  |  Bank: {info.BankGold:N0}g  |  XP Bonus: +{bonus:F0}%");
+                terminal.WriteLine($"  {Loc.Get("guild.board_member_info", info.MemberCount, GuildSystem.MaxGuildMembers, info.BankGold.ToString("N0"), bonus.ToString("F0"))}");
                 if (!string.IsNullOrEmpty(info.Motto))
                 {
                     terminal.SetColor("gray");
@@ -3446,10 +3462,10 @@ public class MainStreetLocation : BaseLocation
         else
         {
             terminal.SetColor("gray");
-            terminal.WriteLine("  You are not in a guild.");
+            terminal.WriteLine($"  {Loc.Get("guild.board_not_in_guild")}");
             terminal.SetColor("white");
-            terminal.WriteLine("  /gcreate <name> — Found a guild (10,000 gold)");
-            terminal.WriteLine("  Ask a guild leader for an invite with /tell");
+            terminal.WriteLine($"  {Loc.Get("guild.board_hint_create_short")}");
+            terminal.WriteLine($"  {Loc.Get("guild.board_hint_invite")}");
         }
 
         if (!IsScreenReader)

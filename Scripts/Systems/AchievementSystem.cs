@@ -1097,6 +1097,18 @@ public static class AchievementSystem
             if (achievement.ExperienceReward > 0)
                 player.Experience += achievement.ExperienceReward;
 
+            // Fame from achievements — scales with tier
+            int fameReward = achievement.Tier switch
+            {
+                AchievementTier.Bronze => 2,
+                AchievementTier.Silver => 5,
+                AchievementTier.Gold => 10,
+                AchievementTier.Platinum => 20,
+                AchievementTier.Diamond => 50,
+                _ => 2
+            };
+            player.Fame += fameReward;
+
             // Queue notification on per-player queue (not the static one)
             player.Achievements.PendingNotifications.Enqueue(achievement);
 

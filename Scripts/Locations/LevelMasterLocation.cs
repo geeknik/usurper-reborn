@@ -1113,7 +1113,12 @@ public class LevelMasterLocation : BaseLocation
             // Track statistics for each level gained
             for (int i = 0; i < levelsGained; i++)
             {
-                player.Statistics.RecordLevelUp(startLevel + i + 1);
+                int lvl = startLevel + i + 1;
+                player.Statistics.RecordLevelUp(lvl);
+
+                // Fame milestone every 10 levels
+                if (lvl % 10 == 0)
+                    player.Fame += 5;
             }
 
             // Telemetry

@@ -3851,6 +3851,7 @@ public partial class GameEngine
             // Status
             Chivalry = playerData.Chivalry,
             Darkness = playerData.Darkness,
+            Fame = playerData.Fame,
             Mental = playerData.Mental,
             Poison = playerData.Poison,
             PoisonTurns = playerData.PoisonTurns,

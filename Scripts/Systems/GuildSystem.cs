@@ -9,18 +9,28 @@ namespace UsurperRemake.Systems;
 
 /// <summary>
 /// Guild system for online multiplayer mode (v0.52.0).
-/// Provides guild creation, membership management, guild bank, and shared perks.
+/// Provides guild creation, membership management, guild bank (gold + items), rank system, and shared perks.
 /// Guild data is stored in SQLite tables for persistence across sessions.
 ///
+/// Ranks (highest to lowest):
+///   Leader  — full control (invite, kick, promote/demote, withdraw gold/items, set ranks)
+///   Officer — can invite, withdraw items, withdraw gold (up to 50k per withdrawal)
+///   Member  — deposit gold/items only, no withdrawals
+///
 /// Chat commands:
-///   /guild          — show guild info
-///   /gcreate name   — create a guild (costs 10,000 gold)
-///   /ginvite player — invite a player to your guild
-///   /gleave         — leave your current guild
-///   /gkick player   — kick a member (leader only)
-///   /ginfo name     — view info about any guild
-///   /gc message     — guild chat (members only)
-///   /gbank amount   — deposit gold into guild bank
+///   /guild            — show guild info (your guild)
+///   /gcreate name     — create a guild (costs 10,000 gold)
+///   /ginvite player   — invite a player (Leader/Officer)
+///   /gleave           — leave your current guild
+///   /gkick player     — kick a member (Leader only)
+///   /ginfo name       — view info about any guild
+///   /gc message       — guild chat (members only)
+///   /gbank deposit N  — deposit gold into guild bank
+///   /gbank withdraw N — withdraw gold (Leader/Officer)
+///   /gbank items      — view guild bank items
+///   /gdeposit         — deposit an item from inventory into guild bank
+///   /gwithdraw N      — withdraw item #N from guild bank (Leader/Officer)
+///   /grank player R   — set a member's rank (Leader only)
 /// </summary>
 public class GuildSystem
 {
@@ -38,6 +48,19 @@ public class GuildSystem
     public const int MaxGuildMembers = 20;
     public const double GuildXPBonusPerMember = 0.02; // 2% per member
     public const double MaxGuildXPBonus = 0.10; // 10% cap
+    public const long OfficerGoldWithdrawLimit = 50000; // Officers can withdraw up to 50k per transaction
+    public const int MaxBankItems = 50; // Maximum items in guild bank
+
+    // Rank hierarchy: Leader > Officer > Member
+    public static readonly string[] RankHierarchy = { "Leader", "Officer", "Member" };
+
+    /// <summary>
+    /// Check if a rank can perform a given action.
+    /// </summary>
+    public static bool RankCanInvite(string rank) => rank == "Leader" || rank == "Officer";
+    public static bool RankCanWithdraw(string rank) => rank == "Leader" || rank == "Officer";
+    public static bool RankCanKick(string rank) => rank == "Leader";
+    public static bool RankCanPromote(string rank) => rank == "Leader";
 
     public GuildSystem(string databasePath)
     {
@@ -74,6 +97,18 @@ public class GuildSystem
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_guild_members_guild ON guild_members(guild_name);
+
+                CREATE TABLE IF NOT EXISTS guild_bank_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_name TEXT NOT NULL COLLATE NOCASE,
+                    item_name TEXT NOT NULL,
+                    item_json TEXT NOT NULL,
+                    deposited_by TEXT NOT NULL,
+                    deposited_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (guild_name) REFERENCES guilds(name)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_guild_bank_items_guild ON guild_bank_items(guild_name);
             ";
             cmd.ExecuteNonQuery();
         }
@@ -256,8 +291,10 @@ public class GuildSystem
             // If leader left, promote next member or disband
             if (isLeader)
             {
+                // Prefer promoting an Officer, otherwise oldest member
                 using var nextCmd = conn.CreateCommand();
-                nextCmd.CommandText = "SELECT username FROM guild_members WHERE guild_name = @guild ORDER BY joined_at ASC LIMIT 1";
+                nextCmd.CommandText = @"SELECT username FROM guild_members WHERE guild_name = @guild
+                    ORDER BY CASE rank WHEN 'Officer' THEN 0 ELSE 1 END, joined_at ASC LIMIT 1";
                 nextCmd.Parameters.AddWithValue("@guild", guildName);
                 var nextMember = nextCmd.ExecuteScalar()?.ToString();
 
@@ -274,7 +311,12 @@ public class GuildSystem
                 }
                 else
                 {
-                    // No members left — disband
+                    // No members left — disband (clean up bank items too)
+                    using var cleanupCmd = conn.CreateCommand();
+                    cleanupCmd.CommandText = "DELETE FROM guild_bank_items WHERE guild_name = @guild";
+                    cleanupCmd.Parameters.AddWithValue("@guild", guildName);
+                    cleanupCmd.ExecuteNonQuery();
+
                     using var disbandCmd = conn.CreateCommand();
                     disbandCmd.CommandText = "DELETE FROM guilds WHERE name = @guild";
                     disbandCmd.Parameters.AddWithValue("@guild", guildName);
@@ -342,6 +384,7 @@ public class GuildSystem
 
             var info = new GuildInfo
             {
+                Name = guildName,
                 DisplayName = reader.GetString(0),
                 Motto = reader.IsDBNull(1) ? "" : reader.GetString(1),
                 LeaderUsername = reader.GetString(2),
@@ -356,7 +399,8 @@ public class GuildSystem
                 SELECT gm.username, gm.rank, p.display_name
                 FROM guild_members gm
                 LEFT JOIN players p ON gm.username = p.username COLLATE NOCASE
-                WHERE gm.guild_name = @guild ORDER BY gm.rank DESC, gm.joined_at ASC";
+                WHERE gm.guild_name = @guild
+                ORDER BY CASE gm.rank WHEN 'Leader' THEN 0 WHEN 'Officer' THEN 1 ELSE 2 END, gm.joined_at ASC";
             membersCmd.Parameters.AddWithValue("@guild", guildName);
             using var mReader = membersCmd.ExecuteReader();
             info.Members = new List<GuildMemberInfo>();
@@ -394,17 +438,22 @@ public class GuildSystem
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 SELECT g.name, g.display_name, g.motto, g.leader_username, g.bank_gold, g.created_at,
-                       (SELECT COUNT(*) FROM guild_members WHERE guild_name = g.name) as member_count
+                       (SELECT COUNT(*) FROM guild_members WHERE guild_name = g.name) as member_count,
+                       p.display_name as leader_display
                 FROM guilds g
+                LEFT JOIN players p ON g.leader_username = p.username COLLATE NOCASE
                 ORDER BY member_count DESC, g.bank_gold DESC";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
+                string leaderLogin = reader.GetString(3);
                 guilds.Add(new GuildInfo
                 {
+                    Name = reader.GetString(0),
                     DisplayName = reader.GetString(1),
                     Motto = reader.IsDBNull(2) ? "" : reader.GetString(2),
                     LeaderUsername = reader.GetString(3),
+                    LeaderDisplayName = reader.IsDBNull(7) ? leaderLogin : reader.GetString(7),
                     BankGold = reader.GetInt64(4),
                     CreatedAt = reader.GetString(5),
                     MemberCount = reader.GetInt32(6)
@@ -441,11 +490,12 @@ public class GuildSystem
     /// <summary>
     /// Send a guild invite to a player.
     /// </summary>
-    public void SendInvite(string targetUsername, string guildName, string inviterName)
+    public void SendInvite(string targetUsername, string guildName, string inviterName, string? guildDisplayName = null)
     {
         pendingInvites[targetUsername] = new GuildInvite
         {
             GuildName = guildName,
+            GuildDisplayName = guildDisplayName ?? guildName,
             InviterName = inviterName,
             ExpiresAt = DateTime.UtcNow.AddMinutes(2)
         };
@@ -521,13 +571,285 @@ public class GuildSystem
         }
         catch { return false; }
     }
+
+    /// <summary>
+    /// Get a member's rank in their guild.
+    /// </summary>
+    public string GetMemberRank(string username)
+    {
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT rank FROM guild_members WHERE username = @user COLLATE NOCASE";
+            cmd.Parameters.AddWithValue("@user", username.ToLowerInvariant());
+            return cmd.ExecuteScalar()?.ToString() ?? "Member";
+        }
+        catch { return "Member"; }
+    }
+
+    /// <summary>
+    /// Set a member's rank. Only the Leader can do this. Cannot change own rank or set someone to Leader.
+    /// </summary>
+    public string? SetMemberRank(string leaderUsername, string targetUsername, string newRank)
+    {
+        var guildName = GetPlayerGuild(leaderUsername);
+        if (guildName == null) return "You are not in a guild.";
+        if (!IsGuildLeader(leaderUsername, guildName)) return "Only the guild leader can set ranks.";
+        if (string.Equals(leaderUsername, targetUsername, StringComparison.OrdinalIgnoreCase))
+            return "You cannot change your own rank.";
+
+        var targetGuild = GetPlayerGuild(targetUsername);
+        if (!string.Equals(targetGuild, guildName, StringComparison.OrdinalIgnoreCase))
+            return $"{targetUsername} is not in your guild.";
+
+        // Validate rank
+        if (newRank != "Officer" && newRank != "Member")
+            return "Valid ranks: Officer, Member";
+
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE guild_members SET rank = @rank WHERE username = @user COLLATE NOCASE";
+            cmd.Parameters.AddWithValue("@rank", newRank);
+            cmd.Parameters.AddWithValue("@user", targetUsername.ToLowerInvariant());
+            cmd.ExecuteNonQuery();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to set rank: {ex.Message}");
+            return "Failed to set rank.";
+        }
+    }
+
+    /// <summary>
+    /// Transfer leadership to another guild member. Current leader becomes Officer.
+    /// </summary>
+    public string? TransferLeadership(string currentLeader, string newLeader)
+    {
+        var guildName = GetPlayerGuild(currentLeader);
+        if (guildName == null) return "You are not in a guild.";
+        if (!IsGuildLeader(currentLeader, guildName)) return "Only the guild leader can transfer leadership.";
+        if (string.Equals(currentLeader, newLeader, StringComparison.OrdinalIgnoreCase))
+            return "You are already the leader.";
+
+        var targetGuild = GetPlayerGuild(newLeader);
+        if (!string.Equals(targetGuild, guildName, StringComparison.OrdinalIgnoreCase))
+            return $"{newLeader} is not in your guild.";
+
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE guilds SET leader_username = @new WHERE name = @guild;
+                UPDATE guild_members SET rank = 'Leader' WHERE username = @new AND guild_name = @guild;
+                UPDATE guild_members SET rank = 'Officer' WHERE username = @old AND guild_name = @guild";
+            cmd.Parameters.AddWithValue("@new", newLeader.ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@old", currentLeader.ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@guild", guildName);
+            cmd.ExecuteNonQuery();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to transfer leadership: {ex.Message}");
+            return "Failed to transfer leadership.";
+        }
+    }
+
+    /// <summary>
+    /// Withdraw gold from the guild bank. Officers limited to OfficerGoldWithdrawLimit per transaction.
+    /// </summary>
+    public string? WithdrawGold(string username, long amount)
+    {
+        var guildName = GetPlayerGuild(username);
+        if (guildName == null) return "Not in a guild.";
+        if (amount <= 0) return "Amount must be positive.";
+
+        string rank = GetMemberRank(username);
+        if (!RankCanWithdraw(rank)) return "Your rank does not allow gold withdrawals.";
+
+        if (rank == "Officer" && amount > OfficerGoldWithdrawLimit)
+            return $"Officers can withdraw up to {OfficerGoldWithdrawLimit:N0} gold per transaction.";
+
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+
+            // Check bank balance
+            using (var checkCmd = conn.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT bank_gold FROM guilds WHERE name = @guild COLLATE NOCASE";
+                checkCmd.Parameters.AddWithValue("@guild", guildName);
+                long bankGold = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
+                if (bankGold < amount) return $"Guild bank only has {bankGold:N0} gold.";
+            }
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE guilds SET bank_gold = bank_gold - @amount WHERE name = @guild AND bank_gold >= @amount";
+            cmd.Parameters.AddWithValue("@amount", amount);
+            cmd.Parameters.AddWithValue("@guild", guildName);
+            int rows = cmd.ExecuteNonQuery();
+            if (rows == 0) return "Insufficient gold in guild bank.";
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to withdraw gold: {ex.Message}");
+            return "Failed to withdraw gold.";
+        }
+    }
+
+    /// <summary>
+    /// Deposit an item into the guild bank. Any member can deposit.
+    /// </summary>
+    public string? DepositItem(string username, string itemName, string itemJson)
+    {
+        var guildName = GetPlayerGuild(username);
+        if (guildName == null) return "Not in a guild.";
+
+        // Check item count
+        int itemCount = GetBankItemCount(guildName);
+        if (itemCount >= MaxBankItems)
+            return $"Guild bank is full ({MaxBankItems} items max).";
+
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"INSERT INTO guild_bank_items (guild_name, item_name, item_json, deposited_by)
+                                VALUES (@guild, @name, @json, @user)";
+            cmd.Parameters.AddWithValue("@guild", guildName);
+            cmd.Parameters.AddWithValue("@name", itemName);
+            cmd.Parameters.AddWithValue("@json", itemJson);
+            cmd.Parameters.AddWithValue("@user", username.ToLowerInvariant());
+            cmd.ExecuteNonQuery();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to deposit item: {ex.Message}");
+            return "Failed to deposit item.";
+        }
+    }
+
+    /// <summary>
+    /// Withdraw an item from the guild bank by ID. Leader/Officer only.
+    /// Returns the item JSON on success, or null on failure (error message set via out param).
+    /// </summary>
+    public string? WithdrawItem(string username, int itemId, out string? errorMessage)
+    {
+        errorMessage = null;
+        var guildName = GetPlayerGuild(username);
+        if (guildName == null) { errorMessage = "Not in a guild."; return null; }
+
+        string rank = GetMemberRank(username);
+        if (!RankCanWithdraw(rank)) { errorMessage = "Your rank does not allow item withdrawals."; return null; }
+
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+
+            // Use transaction to prevent race condition (two players withdrawing same item)
+            using var transaction = conn.BeginTransaction();
+
+            // Get the item
+            string? itemJson;
+            using (var getCmd = conn.CreateCommand())
+            {
+                getCmd.CommandText = "SELECT item_json FROM guild_bank_items WHERE id = @id AND guild_name = @guild COLLATE NOCASE";
+                getCmd.Parameters.AddWithValue("@id", itemId);
+                getCmd.Parameters.AddWithValue("@guild", guildName);
+                itemJson = getCmd.ExecuteScalar()?.ToString();
+            }
+
+            if (itemJson == null) { transaction.Rollback(); errorMessage = "Item not found in guild bank."; return null; }
+
+            // Delete the item
+            using var delCmd = conn.CreateCommand();
+            delCmd.CommandText = "DELETE FROM guild_bank_items WHERE id = @id AND guild_name = @guild COLLATE NOCASE";
+            delCmd.Parameters.AddWithValue("@id", itemId);
+            delCmd.Parameters.AddWithValue("@guild", guildName);
+            delCmd.ExecuteNonQuery();
+
+            transaction.Commit();
+            return itemJson;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to withdraw item: {ex.Message}");
+            errorMessage = "Failed to withdraw item.";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Get all items in a guild's bank.
+    /// </summary>
+    public List<GuildBankItem> GetBankItems(string guildName)
+    {
+        var items = new List<GuildBankItem>();
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT id, item_name, item_json, deposited_by, deposited_at
+                                FROM guild_bank_items WHERE guild_name = @guild COLLATE NOCASE
+                                ORDER BY deposited_at DESC";
+            cmd.Parameters.AddWithValue("@guild", guildName);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                items.Add(new GuildBankItem
+                {
+                    Id = reader.GetInt32(0),
+                    ItemName = reader.GetString(1),
+                    ItemJson = reader.GetString(2),
+                    DepositedBy = reader.GetString(3),
+                    DepositedAt = reader.GetString(4)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Instance?.LogError("GUILD", $"Failed to get bank items: {ex.Message}");
+        }
+        return items;
+    }
+
+    private int GetBankItemCount(string guildName)
+    {
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM guild_bank_items WHERE guild_name = @guild COLLATE NOCASE";
+            cmd.Parameters.AddWithValue("@guild", guildName);
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
+        catch { return 0; }
+    }
 }
 
 public class GuildInfo
 {
+    public string Name { get; set; } = ""; // Lowercased key used in DB/cache lookups
     public string DisplayName { get; set; } = "";
     public string Motto { get; set; } = "";
     public string LeaderUsername { get; set; } = "";
+    public string LeaderDisplayName { get; set; } = ""; // Resolved display name for leader
     public long BankGold { get; set; }
     public string CreatedAt { get; set; } = "";
     public int MemberCount { get; set; }
@@ -544,6 +866,16 @@ public class GuildMemberInfo
 public class GuildInvite
 {
     public string GuildName { get; set; } = "";
+    public string GuildDisplayName { get; set; } = ""; // Human-readable display name
     public string InviterName { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
+}
+
+public class GuildBankItem
+{
+    public int Id { get; set; }
+    public string ItemName { get; set; } = "";
+    public string ItemJson { get; set; } = "";
+    public string DepositedBy { get; set; } = "";
+    public string DepositedAt { get; set; } = "";
 }

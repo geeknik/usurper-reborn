@@ -1197,6 +1197,7 @@ namespace UsurperRemake.Systems
                         // Apply directly to the killing player
                         killingPlayer.Experience += xpReward;
                         killingPlayer.Gold += goldReward;
+                        killingPlayer.Fame += 25; // Fame from world boss kill
 
                         // Generate and give loot item
                         var lootItem = LootGenerator.GenerateWorldBossLoot(
@@ -1263,6 +1264,7 @@ namespace UsurperRemake.Systems
                             // Apply rewards in-memory only (saved with next session save)
                             onlinePlayer.Experience += xpReward;
                             onlinePlayer.Gold += goldReward;
+                            onlinePlayer.Fame += 15; // Fame from world boss participation
 
                             var lootItem = LootGenerator.GenerateWorldBossLoot(
                                 bossLevel, minRarity, bossDef.Element,

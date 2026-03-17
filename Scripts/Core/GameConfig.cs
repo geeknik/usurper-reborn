@@ -9,7 +9,7 @@ using System.Collections.Generic;
 public static partial class GameConfig
 {
     // Version information
-    public const string Version = "0.52.9";
+    public const string Version = "0.52.10";
     public const string VersionName = "The Hook";
     public const string DiscordInvite = "discord.gg/EZhwgDT6Ta";
 
@@ -660,6 +660,11 @@ public static partial class GameConfig
     public const int WorldBossMinPlayersToSpawn = 2;            // Min online players to trigger spawn
     public const int WorldBossSpawnCooldownTicks = 120;         // ~1 hour (120 ticks * 30s) between bosses (unused, see Hours)
     public const double WorldBossSpawnCooldownHours = 4.0;      // Hours between boss spawns after defeat/expire
+
+    // Knighthood bonuses
+    public const float KnightDamageBonus = 0.05f;              // +5% damage for knighted players
+    public const float KnightDefenseBonus = 0.05f;             // +5% defense for knighted players
+    public const int KnightFameDecayResistance = 2;            // Fame loss reduced by this amount for knights
     public const int WorldBossDurationHours = 1;                // Fight window in hours before despawn
     public const int WorldBossMinLevel = 10;                    // Min player level to participate
     public const int WorldBossMaxRoundsPerSession = 50;         // Max combat rounds per session
@@ -2127,4 +2132,9 @@ public static class TeamXPConfig
 {
     public const int MaxTeamSlots = 5; // Player (0) + 4 teammate slots (1-4)
     public static readonly int[] DefaultTeamXPPercent = { 100, 0, 0, 0, 0 };
+
+    // Catch-up XP bonus for underleveled teammates
+    // When an NPC/companion is below the player's level, they get bonus XP to close the gap
+    public const double CatchUpBonusPerLevel = 0.10;  // +10% per level behind (e.g. 10 levels behind = +100% = 2x XP)
+    public const double CatchUpMaxMultiplier = 4.0;   // Cap at 4x total XP (prevents extreme jumps)
 }

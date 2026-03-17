@@ -134,12 +134,18 @@ namespace UsurperRemake.Systems
 
                     var viaTag = FormatConnectionType(player.ConnectionType);
 
-                    // Check if this player is spectating or being spectated
+                    // Check live session for knight title and spectator status
                     var specTag = "";
+                    string displayName = player.DisplayName;
                     var mudServer = UsurperRemake.Server.MudServer.Instance;
                     if (mudServer != null && mudServer.ActiveSessions.TryGetValue(
                         player.DisplayName.ToLowerInvariant(), out var session))
                     {
+                        // Prepend knight title (Sir/Dame) if knighted
+                        var livePlayer = session.Context?.Engine?.CurrentPlayer;
+                        if (livePlayer?.IsKnighted == true)
+                            displayName = $"{livePlayer.NobleTitle} {displayName}";
+
                         if (session.IsSpectating && session.SpectatingSession != null)
                             specTag = $" [watching {session.SpectatingSession.Username}]";
                         else if (session.Spectators.Count > 0)
@@ -147,7 +153,7 @@ namespace UsurperRemake.Systems
                     }
 
                     terminal.SetColor("white");
-                    terminal.Write($"  {player.DisplayName,-18} ");
+                    terminal.Write($"  {displayName,-18} ");
                     terminal.SetColor("green");
                     terminal.Write($"{FormatLocation(player.Location),-16} ");
                     terminal.SetColor("darkgray");

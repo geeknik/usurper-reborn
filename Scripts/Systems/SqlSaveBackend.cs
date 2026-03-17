@@ -1626,7 +1626,8 @@ namespace UsurperRemake.Systems
                         json_extract(p.player_data, '$.player.level') as level,
                         json_extract(p.player_data, '$.player.class') as class_id,
                         json_extract(p.player_data, '$.player.experience') as xp,
-                        CASE WHEN op.username IS NOT NULL THEN 1 ELSE 0 END as is_online
+                        CASE WHEN op.username IS NOT NULL THEN 1 ELSE 0 END as is_online,
+                        json_extract(p.player_data, '$.player.nobleTitle') as noble_title
                     FROM players p
                     LEFT JOIN online_players op ON LOWER(p.username) = LOWER(op.username)
                         AND op.last_heartbeat >= datetime('now', '-120 seconds')
@@ -1646,7 +1647,8 @@ namespace UsurperRemake.Systems
                         Level = reader.IsDBNull(1) ? 1 : Convert.ToInt32(reader.GetValue(1)),
                         ClassId = reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2)),
                         Experience = reader.IsDBNull(3) ? 0 : Convert.ToInt64(reader.GetValue(3)),
-                        IsOnline = reader.GetInt32(4) == 1
+                        IsOnline = reader.GetInt32(4) == 1,
+                        NobleTitle = reader.IsDBNull(5) ? null : reader.GetString(5)
                     });
                 }
             }
@@ -3821,6 +3823,8 @@ namespace UsurperRemake.Systems
             using var cmd = connection.CreateCommand();
             cmd.CommandText = @"SELECT id, seller, item_name, item_json, price, listed_at, expires_at, status, COALESCE(gold_collected, 0)
                                 FROM auction_listings WHERE LOWER(seller) = LOWER(@seller)
+                                AND NOT (status = 'sold' AND COALESCE(gold_collected, 0) = 1)
+                                AND status NOT IN ('collected', 'cancelled')
                                 ORDER BY listed_at DESC LIMIT 20;";
             cmd.Parameters.AddWithValue("@seller", seller);
             using var reader = await cmd.ExecuteReaderAsync();

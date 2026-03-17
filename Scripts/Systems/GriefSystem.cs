@@ -193,6 +193,10 @@ namespace UsurperRemake.Systems
         public GriefEffects GetCurrentEffects()
         {
             var effects = new GriefEffects();
+            bool online = UsurperRemake.BBS.DoorMode.IsOnlineMode;
+
+            // In online mode, grief effects don't stack — use worst single effect per category.
+            // In single-player, effects accumulate across all active grief instances.
 
             // Apply effects from companion grief
             foreach (var grief in activeGrief.Values)
@@ -201,10 +205,21 @@ namespace UsurperRemake.Systems
                     continue;
 
                 var stageEffects = GetStageEffects(grief.CurrentStage);
-                effects.CombatModifier += stageEffects.CombatModifier;
-                effects.DamageModifier += stageEffects.DamageModifier;
-                effects.DefenseModifier += stageEffects.DefenseModifier;
-                effects.AllStatModifier += stageEffects.AllStatModifier;
+                if (online)
+                {
+                    // Worst single effect (most negative for penalties, most positive for bonuses)
+                    effects.CombatModifier = Math.Min(effects.CombatModifier, stageEffects.CombatModifier);
+                    effects.DamageModifier = Math.Max(effects.DamageModifier, stageEffects.DamageModifier);
+                    effects.DefenseModifier = Math.Min(effects.DefenseModifier, stageEffects.DefenseModifier);
+                    effects.AllStatModifier = Math.Min(effects.AllStatModifier, stageEffects.AllStatModifier);
+                }
+                else
+                {
+                    effects.CombatModifier += stageEffects.CombatModifier;
+                    effects.DamageModifier += stageEffects.DamageModifier;
+                    effects.DefenseModifier += stageEffects.DefenseModifier;
+                    effects.AllStatModifier += stageEffects.AllStatModifier;
+                }
             }
 
             // Apply effects from NPC grief
@@ -214,11 +229,27 @@ namespace UsurperRemake.Systems
                     continue;
 
                 var stageEffects = GetStageEffects(grief.CurrentStage);
-                effects.CombatModifier += stageEffects.CombatModifier;
-                effects.DamageModifier += stageEffects.DamageModifier;
-                effects.DefenseModifier += stageEffects.DefenseModifier;
-                effects.AllStatModifier += stageEffects.AllStatModifier;
+                if (online)
+                {
+                    effects.CombatModifier = Math.Min(effects.CombatModifier, stageEffects.CombatModifier);
+                    effects.DamageModifier = Math.Max(effects.DamageModifier, stageEffects.DamageModifier);
+                    effects.DefenseModifier = Math.Min(effects.DefenseModifier, stageEffects.DefenseModifier);
+                    effects.AllStatModifier = Math.Min(effects.AllStatModifier, stageEffects.AllStatModifier);
+                }
+                else
+                {
+                    effects.CombatModifier += stageEffects.CombatModifier;
+                    effects.DamageModifier += stageEffects.DamageModifier;
+                    effects.DefenseModifier += stageEffects.DefenseModifier;
+                    effects.AllStatModifier += stageEffects.AllStatModifier;
+                }
             }
+
+            // Safety clamp for single-player stacking — grief can never reduce by more than 50%
+            effects.CombatModifier = Math.Max(-0.50f, effects.CombatModifier);
+            effects.DamageModifier = Math.Max(-0.50f, effects.DamageModifier);
+            effects.DefenseModifier = Math.Max(-0.50f, effects.DefenseModifier);
+            effects.AllStatModifier = Math.Max(-0.50f, effects.AllStatModifier);
 
             // Also add permanent wisdom bonus from completed grief (both companions and NPCs)
             int completedGriefs = activeGrief.Values.Count(g => g.IsComplete) +
@@ -579,40 +610,42 @@ namespace UsurperRemake.Systems
 
         private int GetStageDuration(GriefStage stage)
         {
+            bool online = UsurperRemake.BBS.DoorMode.IsOnlineMode;
             return stage switch
             {
-                GriefStage.Denial => 3,
-                GriefStage.Anger => 5,
-                GriefStage.Bargaining => 3,
-                GriefStage.Depression => 7,
+                GriefStage.Denial => online ? 1 : 3,
+                GriefStage.Anger => online ? 1 : 5,
+                GriefStage.Bargaining => online ? 1 : 3,
+                GriefStage.Depression => online ? 1 : 7,
                 GriefStage.Acceptance => int.MaxValue, // Permanent
-                _ => 3
+                _ => online ? 1 : 3
             };
         }
 
         private GriefEffects GetStageEffects(GriefStage stage)
         {
+            bool online = UsurperRemake.BBS.DoorMode.IsOnlineMode;
             return stage switch
             {
                 GriefStage.Denial => new GriefEffects
                 {
-                    CombatModifier = -0.20f,
+                    CombatModifier = online ? -0.10f : -0.20f,
                     Description = Loc.Get("grief.effect_denial")
                 },
                 GriefStage.Anger => new GriefEffects
                 {
-                    DamageModifier = 0.30f,
-                    DefenseModifier = -0.20f,
+                    DamageModifier = online ? 0.15f : 0.30f,
+                    DefenseModifier = online ? -0.10f : -0.20f,
                     Description = Loc.Get("grief.effect_anger")
                 },
                 GriefStage.Bargaining => new GriefEffects
                 {
-                    CombatModifier = -0.10f,
+                    CombatModifier = online ? -0.05f : -0.10f,
                     Description = Loc.Get("grief.effect_bargaining")
                 },
                 GriefStage.Depression => new GriefEffects
                 {
-                    AllStatModifier = -0.30f,
+                    AllStatModifier = online ? -0.15f : -0.30f,
                     Description = Loc.Get("grief.effect_depression")
                 },
                 GriefStage.Acceptance => new GriefEffects
@@ -622,6 +655,85 @@ namespace UsurperRemake.Systems
                 },
                 _ => new GriefEffects()
             };
+        }
+
+        /// <summary>
+        /// Get a list of all active grief states with companion names and stages for display
+        /// </summary>
+        public List<(string name, GriefStage stage)> GetActiveGriefDetails()
+        {
+            var details = new List<(string name, GriefStage stage)>();
+            foreach (var grief in activeGrief.Values)
+            {
+                if (!grief.IsComplete)
+                    details.Add((grief.CompanionName, grief.CurrentStage));
+            }
+            foreach (var grief in activeNpcGrief.Values)
+            {
+                if (!grief.IsComplete)
+                    details.Add((grief.CompanionName, grief.CurrentStage));
+            }
+            return details;
+        }
+
+        /// <summary>
+        /// Get a random grief flashback message for after combat, appropriate to the current stage.
+        /// Returns null if no active grief or random chance says no flashback this time.
+        /// ~25% chance per combat to trigger.
+        /// </summary>
+        public string? GetPostCombatFlashback(Random random)
+        {
+            if (!IsGrieving) return null;
+            if (random.Next(100) >= 25) return null; // 25% chance
+
+            // Pick a random active grief
+            var allActive = activeGrief.Values.Concat(activeNpcGrief.Values)
+                .Where(g => !g.IsComplete).ToList();
+            if (allActive.Count == 0) return null;
+
+            var grief = allActive[random.Next(allActive.Count)];
+            string name = grief.CompanionName;
+
+            string stageKey = grief.CurrentStage switch
+            {
+                GriefStage.Denial => "denial",
+                GriefStage.Anger => "anger",
+                GriefStage.Bargaining => "bargaining",
+                GriefStage.Depression => "depression",
+                _ => ""
+            };
+            if (string.IsNullOrEmpty(stageKey)) return null;
+            int idx = random.Next(5);
+            return Loc.Get($"grief.flashback_{stageKey}_{idx}", name);
+        }
+
+        /// <summary>
+        /// Get a combat-start grief message mentioning specific companions being grieved.
+        /// More evocative than the generic stage description.
+        /// </summary>
+        public string? GetCombatStartGriefMessage(Random random)
+        {
+            if (!IsGrieving) return null;
+
+            var allActive = activeGrief.Values.Concat(activeNpcGrief.Values)
+                .Where(g => !g.IsComplete).ToList();
+            if (allActive.Count == 0) return null;
+
+            // Pick one to focus on
+            var grief = allActive[random.Next(allActive.Count)];
+            string name = grief.CompanionName;
+
+            string csKey = grief.CurrentStage switch
+            {
+                GriefStage.Denial => "denial",
+                GriefStage.Anger => "anger",
+                GriefStage.Bargaining => "bargaining",
+                GriefStage.Depression => "depression",
+                _ => ""
+            };
+            if (string.IsNullOrEmpty(csKey)) return null;
+            int csIdx = random.Next(3);
+            return Loc.Get($"grief.combat_start_{csKey}_{csIdx}", name);
         }
 
         private string GetResurrectionFailure(string method, int attempts)

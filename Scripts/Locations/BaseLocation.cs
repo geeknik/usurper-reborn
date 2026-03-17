@@ -2576,7 +2576,11 @@ public abstract class BaseLocation
             WriteOnlineCmd("/gleave", "Leave your guild");
             WriteOnlineCmd("/gkick <player>", "Kick member (leader)");
             WriteOnlineCmd("/gc <msg>", "Guild chat");
-            WriteOnlineCmd("/gbank <amount>", "Deposit gold to guild");
+            WriteOnlineCmd("/gbank", "Guild bank (deposit/withdraw gold, view items)");
+            WriteOnlineCmd("/gdeposit", "Deposit item into guild bank");
+            WriteOnlineCmd("/gwithdraw <#>", "Withdraw item from guild bank");
+            WriteOnlineCmd("/grank <p> <rank>", "Set member rank (leader)");
+            WriteOnlineCmd("/gtransfer <player>", "Transfer leadership");
             WriteOnlineCmd("/ginfo <guild>", "Look up any guild");
 
             WriteBoxLine(() => { }, 0);
@@ -2647,7 +2651,11 @@ public abstract class BaseLocation
             terminal.WriteLine($"/gleave - Leave your guild");
             terminal.WriteLine($"/gkick <player> - Kick member (leader)");
             terminal.WriteLine($"/gc <msg> - Guild chat");
-            terminal.WriteLine($"/gbank <amount> - Deposit gold to guild");
+            terminal.WriteLine($"/gbank - Guild bank (deposit/withdraw gold, view items)");
+            terminal.WriteLine($"/gdeposit - Deposit item into guild bank");
+            terminal.WriteLine($"/gwithdraw <#> - Withdraw item from guild bank");
+            terminal.WriteLine($"/grank <p> <rank> - Set member rank (leader)");
+            terminal.WriteLine($"/gtransfer <player> - Transfer leadership");
             terminal.WriteLine($"/ginfo <guild> - Look up any guild");
             terminal.WriteLine("");
             terminal.WriteLine("Group Dungeon Commands");
@@ -4827,7 +4835,7 @@ public abstract class BaseLocation
         }
 
         // Show temporary combat buffs (well-rested, god slayer, song, herbs)
-        bool hasAnyBuff = currentPlayer.WellRestedCombats > 0 || currentPlayer.HasGodSlayerBuff
+        bool hasAnyBuff = currentPlayer.IsKnighted || currentPlayer.WellRestedCombats > 0 || currentPlayer.HasGodSlayerBuff
             || currentPlayer.HasDarkPactBuff || currentPlayer.HasSettlementBuff
             || currentPlayer.HasActiveSongBuff || currentPlayer.HasActiveHerbBuff
             || currentPlayer.LoversBlissCombats > 0 || currentPlayer.DivineBlessingCombats > 0
@@ -4844,6 +4852,11 @@ public abstract class BaseLocation
         {
             terminal.SetColor("bright_cyan");
             terminal.WriteLine(Loc.Get("base.stat_active_buffs"));
+            if (currentPlayer.IsKnighted)
+            {
+                terminal.SetColor("bright_yellow");
+                terminal.WriteLine($"  - {currentPlayer.NobleTitle}'s Honor: +{(int)(GameConfig.KnightDamageBonus * 100)}% damage, +{(int)(GameConfig.KnightDefenseBonus * 100)}% defense (permanent)");
+            }
             if (currentPlayer.Class == CharacterClass.Alchemist)
             {
                 terminal.SetColor("bright_cyan");

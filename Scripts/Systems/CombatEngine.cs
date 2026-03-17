@@ -386,6 +386,23 @@ public partial class CombatEngine
         abilityCooldowns.Clear();
         teammateCooldowns.Clear();
 
+        // Ensure equipment stat bonuses are current before combat begins.
+        // Equipment changes (equip/unequip, loot pickup, NPC sync) can leave
+        // derived stats stale if RecalculateStats() wasn't called on every path.
+        var preRecalcSTR = player.Strength;
+        var preRecalcWeapPow = player.WeapPow;
+        var preRecalcArmPow = player.ArmPow;
+        var preRecalcDEF = player.Defence;
+        player.RecalculateStats();
+        DebugLogger.Instance.LogInfo("COMBAT_INIT",
+            $"player={player.Name} lv={player.Level} class={player.Class} " +
+            $"preSTR={preRecalcSTR} postSTR={player.Strength} " +
+            $"preWP={preRecalcWeapPow} postWP={player.WeapPow} " +
+            $"preAP={preRecalcArmPow} postAP={player.ArmPow} " +
+            $"preDEF={preRecalcDEF} postDEF={player.Defence} " +
+            $"baseSTR={player.BaseStrength} baseWP=0 " +
+            $"equippedSlots=[{string.Join(",", player.EquippedItems.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}]");
+
         // Initialize combat stamina for player and teammates
         player.InitializeCombatStamina();
 
@@ -465,6 +482,15 @@ public partial class CombatEngine
             Teammates = teammates ?? new List<Character>(),
             CombatLog = new List<string>()
         };
+
+        // Log all monster stats at combat start for diagnosis
+        foreach (var m in monsters)
+        {
+            DebugLogger.Instance.LogInfo("COMBAT_MONSTER",
+                $"player={player.Name} monster={m.Name} lv={m.Level} HP={m.HP}/{m.MaxHP} " +
+                $"STR={m.Strength} DEF={m.Defence} ArmPow={m.ArmPow} WeapPow={m.WeapPow} " +
+                $"Punch={m.Punch} class={m.MonsterClass} isBoss={m.IsBoss} isMiniBoss={m.IsMiniBoss}");
+        }
 
         // Initialize combat state
         globalBegged = false;
@@ -557,14 +583,22 @@ public partial class CombatEngine
 
         result.CombatLog.Add($"Combat begins against {monsters.Count} monster(s)!");
 
-        // Show grief status at combat start
+        // Show grief status at combat start with companion-specific message
         if (GriefSystem.Instance.IsGrieving)
         {
-            var griefFx = GriefSystem.Instance.GetCurrentEffects();
-            if (!string.IsNullOrEmpty(griefFx.Description))
+            var griefMsg = GriefSystem.Instance.GetCombatStartGriefMessage(random);
+            if (!string.IsNullOrEmpty(griefMsg))
             {
                 terminal.SetColor("dark_magenta");
-                terminal.WriteLine($"  {griefFx.Description}");
+                terminal.WriteLine($"  {griefMsg}");
+            }
+            var griefFx = GriefSystem.Instance.GetCurrentEffects();
+            if (griefFx.CombatModifier != 0 || griefFx.AllStatModifier != 0)
+            {
+                terminal.SetColor("dark_gray");
+                float totalPenalty = griefFx.CombatModifier + griefFx.AllStatModifier;
+                if (totalPenalty < 0)
+                    terminal.WriteLine($"  (Grief penalty: {totalPenalty * 100:0}% combat effectiveness)");
             }
         }
 
@@ -1375,14 +1409,22 @@ public partial class CombatEngine
 
         result.CombatLog.Add($"Combat begins against {monster.Name}!");
 
-        // Show grief status at combat start
+        // Show grief status at combat start with companion-specific message
         if (GriefSystem.Instance.IsGrieving)
         {
-            var griefFx = GriefSystem.Instance.GetCurrentEffects();
-            if (!string.IsNullOrEmpty(griefFx.Description))
+            var griefMsg = GriefSystem.Instance.GetCombatStartGriefMessage(random);
+            if (!string.IsNullOrEmpty(griefMsg))
             {
                 terminal.SetColor("dark_magenta");
-                terminal.WriteLine($"  {griefFx.Description}");
+                terminal.WriteLine($"  {griefMsg}");
+            }
+            var griefFx = GriefSystem.Instance.GetCurrentEffects();
+            if (griefFx.CombatModifier != 0 || griefFx.AllStatModifier != 0)
+            {
+                terminal.SetColor("dark_gray");
+                float totalPenalty = griefFx.CombatModifier + griefFx.AllStatModifier;
+                if (totalPenalty < 0)
+                    terminal.WriteLine($"  (Grief penalty: {totalPenalty * 100:0}% combat effectiveness)");
             }
         }
     }
@@ -2828,6 +2870,12 @@ public partial class CombatEngine
             attackPower += (long)(attackPower * (attacker.HQArmoryLevel * 0.05));
         }
 
+        // Knighthood bonus: +5% damage for knighted players
+        if (attacker.IsKnighted)
+        {
+            attackPower += (long)(attackPower * GameConfig.KnightDamageBonus);
+        }
+
         // BossSlayer effect: +10% damage vs bosses (from world boss exclusive loot)
         if (target is Monster monsterTarget && (monsterTarget.IsBoss || monsterTarget.IsMiniBoss))
         {
@@ -2870,6 +2918,16 @@ public partial class CombatEngine
                 terminal.WriteLine($"  {Loc.Get("combat.trickster_stamina", GameConfig.JesterLuckStaminaRefund)}", "bright_magenta");
             }
         }
+
+        // Comprehensive combat logging for every player attack (single-monster path)
+        DebugLogger.Instance.LogInfo("COMBAT_ATTACK",
+            $"player={attacker.Name} lv={attacker.Level} class={attacker.Class} path=single " +
+            $"STR={attacker.Strength} baseSTR={attacker.BaseStrength} WeapPow={attacker.WeapPow} " +
+            $"finalAttackPower={attackPower} " +
+            $"profMult={proficiencyMultiplier:F2} dmgMod={damageModifier:F2} rollMult={rollMultiplier:F2} " +
+            $"TempAtkBonus={attacker.TempAttackBonus} isRaging={attacker.IsRaging} " +
+            $"target={target.Name} targetLv={target.Level} targetArmPow={target.ArmPow} targetDef={target.Defence} " +
+            $"equippedSlots=[{string.Join(",", attacker.EquippedItems.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}]");
 
         // Show critical hit message
         if (attackRoll.IsCriticalSuccess)
@@ -2922,6 +2980,13 @@ public partial class CombatEngine
             defense = Math.Max(0, (long)(defense * 0.6));
 
         long actualDamage = Math.Max(1, attackPower - defense);
+
+        // Log defense calculation for every player attack (single-monster path)
+        DebugLogger.Instance.LogInfo("COMBAT_APPLY_DMG",
+            $"player={attacker.Name} path=single attackPower={attackPower} defense={defense} " +
+            $"targetDef={target.Defence} targetArmPow={target.ArmPow} armorPierce={armorPiercePct}% " +
+            $"actualDmg={actualDamage} monster={target.Name} monsterLv={target.Level} " +
+            $"monsterHP={target.HP}/{target.MaxHP}");
 
         // Boss phase immunity check — physical attacks reduced during physical immunity
         if (target is Monster immuneTarget && immuneTarget.IsPhysicalImmune)
@@ -3979,6 +4044,12 @@ public partial class CombatEngine
         if (player.HQBarracksLevel > 0)
         {
             playerDefense += (long)(playerDefense * (player.HQBarracksLevel * 0.05));
+        }
+
+        // Knighthood bonus: +5% defense for knighted players
+        if (player.IsKnighted)
+        {
+            playerDefense += (long)(playerDefense * GameConfig.KnightDefenseBonus);
         }
 
         // TitanResolve effect: +5% defense (from world boss exclusive loot)
@@ -5353,6 +5424,9 @@ public partial class CombatEngine
             result.Player.TeamXPPercent[0] = 100;
         }
 
+        // Auto-distribute XP when teammates exist but all teammate slots are at 0%
+        AutoDistributeTeamXP(result.Player, result.Teammates);
+
         // Apply per-slot XP percentage distribution
         long totalXPPot = expReward;
         long playerXP = (long)(totalXPPot * result.Player.TeamXPPercent[0] / 100.0);
@@ -5610,6 +5684,19 @@ public partial class CombatEngine
         // Auto-heal with potions after combat, then offer to buy replacements
         AutoHealWithPotions(result.Player);
         AutoRestoreManaWithPotions(result.Player);
+
+        // Post-combat grief flashback (PTSD-like vision)
+        if (GriefSystem.Instance.IsGrieving)
+        {
+            var flashback = GriefSystem.Instance.GetPostCombatFlashback(random);
+            if (flashback != null)
+            {
+                terminal.WriteLine("");
+                terminal.SetColor("dark_magenta");
+                terminal.WriteLine($"  {flashback}");
+                await Task.Delay(GetCombatDelay(2000));
+            }
+        }
 
         // Monk potion purchase option - Pascal PLVSMON.PAS monk encounter
         await OfferMonkPotionPurchase(result.Player);
@@ -9120,6 +9207,18 @@ public partial class CombatEngine
         }
         long actualDamage = Math.Max(1, damage - effectiveArmor);
 
+        // Log every player attack through ApplySingleMonsterDamage for diagnosis
+        if (attacker != null)
+        {
+            DebugLogger.Instance.LogInfo("COMBAT_APPLY_DMG",
+                $"player={attacker.Name} incomingDmg={damage} monsterArmPow={target.ArmPow} " +
+                $"armorPierce={attacker.GetEquipmentArmorPiercing()}% effectiveArmor={effectiveArmor} " +
+                $"actualDmg={actualDamage} monster={target.Name} monsterLv={target.Level} " +
+                $"monsterHP={target.HP}/{target.MaxHP} source={damageSource} " +
+                $"bossContext={BossContext != null} divineArmorReduction={BossContext?.DivineArmorReduction ?? 0} " +
+                $"magImmune={target.IsMagicalImmune}");
+        }
+
         // Marked target takes 30% bonus damage
         if (target.IsMarked)
         {
@@ -9681,17 +9780,33 @@ public partial class CombatEngine
                             }
                         }
 
+                        long preRollAttack = attackPower;
                         attackPower = (long)(attackPower * rollMult);
 
                         // Difficulty modifier
+                        long preDiffAttack = attackPower;
                         attackPower = DifficultySystem.ApplyPlayerDamageMultiplier(attackPower);
 
                         // Grief effects
                         var griefFx = GriefSystem.Instance.GetCurrentEffects();
+                        long preGriefAttack = attackPower;
                         if (griefFx.DamageModifier != 0 || griefFx.CombatModifier != 0 || griefFx.AllStatModifier != 0)
                         {
                             float totalGriefMod = 1.0f + griefFx.DamageModifier + griefFx.CombatModifier + griefFx.AllStatModifier;
                             attackPower = (long)(attackPower * totalGriefMod);
+                            DebugLogger.Instance.LogInfo("COMBAT_GRIEF",
+                                $"player={player.Name} griefDmg={griefFx.DamageModifier:F2} griefCombat={griefFx.CombatModifier:F2} " +
+                                $"griefAllStat={griefFx.AllStatModifier:F2} totalGriefMod={totalGriefMod:F2} " +
+                                $"preGrief={preGriefAttack} postGrief={attackPower}");
+                        }
+
+                        // Log intermediate values to find where attackPower drops to 0
+                        if (attackPower <= 0)
+                        {
+                            DebugLogger.Instance.LogInfo("COMBAT_ZERO",
+                                $"player={player.Name} attackPower=0! preRoll={preRollAttack} postRoll={(long)(preRollAttack * rollMult)} " +
+                                $"preDiff={preDiffAttack} postDiff={preGriefAttack} preGrief={preGriefAttack} postGrief={attackPower} " +
+                                $"griefDmg={griefFx.DamageModifier:F2} griefCombat={griefFx.CombatModifier:F2} griefAllStat={griefFx.AllStatModifier:F2}");
                         }
 
                         // Royal Authority bonus
@@ -9729,6 +9844,8 @@ public partial class CombatEngine
                             attackPower += (long)(attackPower * (player.PermanentDamageBonus / 100.0));
                         if (player.HQArmoryLevel > 0)
                             attackPower += (long)(attackPower * (player.HQArmoryLevel * 0.05));
+                        if (player.IsKnighted)
+                            attackPower += (long)(attackPower * GameConfig.KnightDamageBonus);
 
                         // Divine boon damage bonus (multi-monster path)
                         var mmBoons = player.CachedBoonEffects;
@@ -9774,6 +9891,17 @@ public partial class CombatEngine
                         }
 
                         long damage = Math.Max(1, attackPower);
+
+                        // Comprehensive combat logging for every player attack
+                        DebugLogger.Instance.LogInfo("COMBAT_ATTACK",
+                            $"player={player.Name} lv={player.Level} class={player.Class} swing={s+1}/{swings} offhand={isOffHandAttack} " +
+                            $"STR={player.Strength} baseSTR={player.BaseStrength} WeapPow={player.WeapPow} " +
+                            $"finalAttackPower={attackPower} finalDamage={damage} " +
+                            $"profMult={profMult:F2} dmgMod={damageModifier:F2} rollMult={rollMult:F2} isCrit={isCrit} dexCrit={dexCrit} " +
+                            $"TempAtkBonus={player.TempAttackBonus} isRaging={player.IsRaging} " +
+                            $"target={target.Name} targetLv={target.Level} targetArmPow={target.ArmPow} targetDef={target.Defence} " +
+                            $"equippedSlots=[{string.Join(",", player.EquippedItems.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}]");
+
                         await ApplySingleMonsterDamage(target, damage, result, isOffHandAttack ? "off-hand strike" : "your attack", player);
 
                         // Apply all post-hit enchantment effects (lifesteal, elemental procs, sunforged, poison)
@@ -10544,11 +10672,13 @@ public partial class CombatEngine
             case "weaken":
                 if (target != null && target.IsAlive)
                 {
-                    int defReduction = Math.Max(1, (int)(target.Defence * 0.25));
-                    target.Defence = Math.Max(0, target.Defence - defReduction);
+                    int weakenAtkReduction = Math.Max(1, (int)(target.Strength * 0.30));
+                    int weakenDefReduction = Math.Max(1, (int)(target.Defence * 0.20));
+                    target.Strength = Math.Max(0, target.Strength - weakenAtkReduction);
+                    target.Defence = Math.Max(0, target.Defence - weakenDefReduction);
                     target.WeakenRounds = Math.Max(target.WeakenRounds, abilityResult.Duration > 0 ? abilityResult.Duration : 4);
                     terminal.SetColor("yellow");
-                    terminal.WriteLine($"{target.Name}'s resolve crumbles! (-{defReduction} DEF for the fight)");
+                    terminal.WriteLine($"{target.Name}'s resolve crumbles! (-{weakenAtkReduction} ATK, -{weakenDefReduction} DEF)");
                 }
                 break;
 
@@ -14511,10 +14641,19 @@ public partial class CombatEngine
                         terminal.WriteLine($"{companion.DisplayName} takes {actualDmg} damage from {abilityName}!", "red");
                         result.CombatLog.Add($"{monster.Name} uses {abilityName} on {companion.DisplayName} for {actualDmg}");
                     }
-                    // DamageMultiplier abilities (CrushingBlow, LifeDrain, etc.) — same logic as player path
+                    // DamageMultiplier abilities (CrushingBlow, LifeDrain, CriticalStrike, etc.)
                     if (abilityResult.DamageMultiplier > 0 && abilityResult.DirectDamage == 0)
                     {
-                        long abilityDefense = (long)(Math.Sqrt(companion.Defence) * 3);
+                        // Use full physical defense for melee-type abilities (CriticalStrike, CrushingBlow)
+                        // instead of sqrt-scaled defense which is meant for magical abilities
+                        long abilityDefense = companion.Defence + random.Next(0, (int)Math.Max(1, companion.Defence / 8));
+                        if (companion.ArmPow > 0)
+                        {
+                            int armAbsorbMax = (int)(Math.Sqrt(companion.ArmPow) * 5);
+                            abilityDefense += random.Next(0, armAbsorbMax + 1);
+                        }
+                        abilityDefense += companion.MagicACBonus;
+                        abilityDefense += companion.TempDefenseBonus;
                         long dmg = Math.Max(1, (long)(monster.GetAttackPower() * abilityResult.DamageMultiplier) - abilityDefense);
                         // Cap ability damage per hit
                         double dmCapPct = monster.IsBoss ? 0.85 : 0.75;
@@ -15153,6 +15292,9 @@ public partial class CombatEngine
             result.Player.TeamXPPercent[0] = 100;
         }
 
+        // Auto-distribute XP when teammates exist but all teammate slots are at 0%
+        AutoDistributeTeamXP(result.Player, result.Teammates);
+
         // Apply per-slot XP percentage distribution
         long totalXPPotMM = adjustedExp;
         long playerXPmm = (long)(totalXPPotMM * result.Player.TeamXPPercent[0] / 100.0);
@@ -15351,6 +15493,19 @@ public partial class CombatEngine
 
         // Log combat end
         DebugLogger.Instance.LogCombatEnd("Victory", adjustedExp, adjustedGold, result.CombatLog.Count);
+
+        // Post-combat grief flashback (PTSD-like vision)
+        if (GriefSystem.Instance.IsGrieving)
+        {
+            var flashback = GriefSystem.Instance.GetPostCombatFlashback(random);
+            if (flashback != null)
+            {
+                terminal.WriteLine("");
+                terminal.SetColor("dark_magenta");
+                terminal.WriteLine($"  {flashback}");
+                await Task.Delay(GetCombatDelay(2000));
+            }
+        }
 
         // Signal combat over to followers — lets them know the leader is back in exploration mode
         BroadcastGroupCombatEvent(result,
@@ -15658,6 +15813,9 @@ public partial class CombatEngine
         {
             result.Player.TeamXPPercent[0] = 100;
         }
+
+        // Auto-distribute XP when teammates exist but all teammate slots are at 0%
+        AutoDistributeTeamXP(result.Player, result.Teammates);
 
         // Apply per-slot XP percentage distribution
         long totalXPPotPV = adjustedExp;
@@ -16761,11 +16919,13 @@ public partial class CombatEngine
             case "weaken":
                 if (monster != null && monster.IsAlive)
                 {
-                    int defReduction = Math.Max(1, (int)(monster.Defence * 0.25));
-                    monster.Defence = Math.Max(0, monster.Defence - defReduction);
+                    int weakenAtkReduction2 = Math.Max(1, (int)(monster.Strength * 0.30));
+                    int weakenDefReduction2 = Math.Max(1, (int)(monster.Defence * 0.20));
+                    monster.Strength = Math.Max(0, monster.Strength - weakenAtkReduction2);
+                    monster.Defence = Math.Max(0, monster.Defence - weakenDefReduction2);
                     monster.WeakenRounds = Math.Max(monster.WeakenRounds, abilityResult.Duration > 0 ? abilityResult.Duration : 4);
                     terminal.SetColor("yellow");
-                    terminal.WriteLine($"{monster.Name}'s resolve crumbles! (-{defReduction} DEF for the fight)");
+                    terminal.WriteLine($"{monster.Name}'s resolve crumbles! (-{weakenAtkReduction2} ATK, -{weakenDefReduction2} DEF)");
                 }
                 break;
 
@@ -19595,6 +19755,19 @@ public partial class CombatEngine
                 terminal.WriteLine($"{caster.DisplayName} glimpses the future — next attack will miss!", "cyan");
                 break;
 
+            case "weaken":
+                // Reduce attack and defense — used by Siren's Lament, etc.
+                if (target != null)
+                {
+                    int atkReduction = Math.Max(1, (int)(target.Strength * 0.30));
+                    int defReduction = Math.Max(1, (int)(target.Defence * 0.20));
+                    target.Strength = Math.Max(0, target.Strength - atkReduction);
+                    target.Defence = Math.Max(0, target.Defence - defReduction);
+                    target.WeakenRounds = Math.Max(target.WeakenRounds, duration > 0 ? duration : 4);
+                    terminal.WriteLine($"{target.Name}'s resolve crumbles! (-{atkReduction} ATK, -{defReduction} DEF)", "yellow");
+                }
+                break;
+
             case "tidal_reflect":
                 // Tidal Ward: reflect 15% of melee damage back at attackers
                 if (!caster.ActiveStatuses.ContainsKey(StatusEffect.Reflecting))
@@ -20106,16 +20279,71 @@ public partial class CombatEngine
     }
 
     /// <summary>
+    /// Auto-distribute XP evenly when teammates exist but all teammate slots are at 0%.
+    /// Prevents new players from unknowingly starving their teammates of XP.
+    /// </summary>
+    private static void AutoDistributeTeamXP(Character player, List<Character>? teammates)
+    {
+        if (teammates == null || teammates.Count == 0) return;
+
+        // Count XP-eligible teammate slots (not grouped players, not echoes)
+        int eligibleSlots = 0;
+        foreach (var t in teammates)
+        {
+            if (t != null && !t.IsGroupedPlayer && !t.IsEcho)
+                eligibleSlots++;
+        }
+        if (eligibleSlots == 0) return;
+
+        // Check if all teammate slots are at 0% (meaning player never configured XP sharing)
+        bool allTeammateZero = true;
+        for (int s = 1; s < player.TeamXPPercent.Length && s <= eligibleSlots; s++)
+        {
+            if (player.TeamXPPercent[s] > 0)
+            {
+                allTeammateZero = false;
+                break;
+            }
+        }
+
+        if (!allTeammateZero) return; // Player has already configured XP sharing
+
+        // Auto-set even split: e.g. 2 teammates → 50/25/25, 3 teammates → 40/20/20/20
+        int totalSlots = 1 + eligibleSlots; // player + teammates
+        int evenShare = 100 / totalSlots;
+        int remainder = 100 - (evenShare * totalSlots);
+        player.TeamXPPercent[0] = evenShare + remainder; // Player gets remainder
+        for (int s = 1; s < player.TeamXPPercent.Length; s++)
+        {
+            player.TeamXPPercent[s] = s <= eligibleSlots ? evenShare : 0;
+        }
+    }
+
+    /// <summary>
+    /// Calculate catch-up XP multiplier for underleveled teammates.
+    /// Teammates below the player's level get bonus XP to close the gap naturally.
+    /// </summary>
+    private static double GetCatchUpMultiplier(int playerLevel, int teammateLevel)
+    {
+        int levelGap = playerLevel - teammateLevel;
+        if (levelGap <= 0) return 1.0;
+
+        double bonus = 1.0 + (levelGap * TeamXPConfig.CatchUpBonusPerLevel);
+        return Math.Min(bonus, TeamXPConfig.CatchUpMaxMultiplier);
+    }
+
+    /// <summary>
     /// Award experience to NPC teammates (spouses, lovers, team members)
     /// NPCs get 75% of the player's XP and can level up during combat (v0.41.4: raised from 50%)
+    /// Underleveled teammates get a catch-up bonus (+10% per level behind, up to 4x)
     /// </summary>
-    private void AwardTeammateExperience(List<Character> teammates, long playerXP, TerminalEmulator terminal)
+    private void AwardTeammateExperience(List<Character> teammates, long playerXP, TerminalEmulator terminal, int playerLevel = 0)
     {
         if (teammates == null || teammates.Count == 0 || playerXP <= 0) return;
 
-        // Teammates get 75% of player's XP (v0.41.4: raised from 50% to keep companions viable)
-        long teammateXP = (long)(playerXP * 0.75);
-        if (teammateXP <= 0) return;
+        // Base teammate XP: 75% of player's XP (v0.41.4: raised from 50% to keep companions viable)
+        long baseTeammateXP = (long)(playerXP * 0.75);
+        if (baseTeammateXP <= 0) return;
 
         // Count eligible teammates first (echoes and grouped players don't get XP here)
         int eligibleCount = 0;
@@ -20128,7 +20356,7 @@ public partial class CombatEngine
 
         // Show header for teammate XP
         terminal.SetColor("gray");
-        terminal.WriteLine($"Team XP (+{teammateXP} each):");
+        terminal.WriteLine($"Team XP (+{baseTeammateXP} base each):");
 
         foreach (var teammate in teammates)
         {
@@ -20138,14 +20366,19 @@ public partial class CombatEngine
             if (teammate.IsGroupedPlayer) continue; // Grouped players get XP via DistributeGroupRewards
             if (teammate.Level >= 100) continue; // Max level cap
 
+            // Apply catch-up bonus for underleveled teammates
+            double catchUp = GetCatchUpMultiplier(playerLevel, teammate.Level);
+            long teammateXP = (long)(baseTeammateXP * catchUp);
+
             // Award XP
             long previousXP = teammate.Experience;
             teammate.Experience += teammateXP;
             long xpNeeded = GetExperienceForLevel(teammate.Level + 1);
 
-            // Show XP gain for all teammates
+            // Show XP gain for all teammates (with catch-up indicator)
             terminal.SetColor("cyan");
-            terminal.WriteLine($"  {teammate.DisplayName}: {teammate.Experience:N0}/{xpNeeded:N0}");
+            string catchUpLabel = catchUp > 1.0 ? $" (+{teammateXP} catch-up {catchUp:F1}x)" : "";
+            terminal.WriteLine($"  {teammate.DisplayName}: {teammate.Experience:N0}/{xpNeeded:N0}{catchUpLabel}");
             terminal.SetColor("white");
 
             // Check for level up (using same formula as player/NPCs)
@@ -20222,8 +20455,12 @@ public partial class CombatEngine
             int percent = player.TeamXPPercent[xpSlot];
             if (percent <= 0) continue;
 
-            long slotXP = (long)(totalXPPot * percent / 100.0);
-            if (slotXP <= 0) continue;
+            long baseSlotXP = (long)(totalXPPot * percent / 100.0);
+            if (baseSlotXP <= 0) continue;
+
+            // Apply catch-up bonus for underleveled teammates (+10% per level behind, up to 4x)
+            double catchUp = GetCatchUpMultiplier(player.Level, teammate.Level);
+            long slotXP = (long)(baseSlotXP * catchUp);
 
             if (!headerShown)
             {
@@ -20232,12 +20469,14 @@ public partial class CombatEngine
                 headerShown = true;
             }
 
+            string catchUpLabel = catchUp > 1.0 ? $" (catch-up {catchUp:F1}x)" : "";
+
             if (teammate.IsCompanion)
             {
                 // Award to companion through CompanionSystem
                 CompanionSystem.Instance?.AwardSpecificCompanionXP(teammate.DisplayName, slotXP, terminal);
                 terminal.SetColor("bright_magenta");
-                terminal.WriteLine($"  {teammate.DisplayName} ({percent}%): +{slotXP} XP");
+                terminal.WriteLine($"  {teammate.DisplayName} ({percent}%): +{slotXP} XP{catchUpLabel}");
             }
             else
             {
@@ -20245,7 +20484,7 @@ public partial class CombatEngine
                 teammate.Experience += slotXP;
                 long xpNeeded = GetExperienceForLevel(teammate.Level + 1);
                 terminal.SetColor("cyan");
-                terminal.WriteLine($"  {teammate.DisplayName} ({percent}%): +{slotXP} XP ({teammate.Experience:N0}/{xpNeeded:N0})");
+                terminal.WriteLine($"  {teammate.DisplayName} ({percent}%): +{slotXP} XP ({teammate.Experience:N0}/{xpNeeded:N0}){catchUpLabel}");
 
                 // Check for level up
                 long xpForNextLevel = GetExperienceForLevel(teammate.Level + 1);

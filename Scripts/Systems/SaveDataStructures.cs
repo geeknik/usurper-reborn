@@ -305,6 +305,7 @@ namespace UsurperRemake.Systems
         // Status
         public long Chivalry { get; set; }
         public long Darkness { get; set; }
+        public int Fame { get; set; }
         public int Mental { get; set; }
         public int Poison { get; set; }
         public int PoisonTurns { get; set; }  // Remaining turns of poison

@@ -1387,18 +1387,38 @@ function renderSettingsTab(data) {
 
 function renderEquipmentTab(data) {
   const eq = data.equipment || {};
+  const items = eq.dynamicEquipment || [];
   const inv = data.inventory || [];
+  const SLOT_NAMES = {0:'None',1:'Head',2:'Body',3:'Arms',4:'Hands',5:'Legs',6:'Feet',7:'Waist',8:'Face',9:'Neck',10:'Cloak',11:'Left Finger',12:'Right Finger',13:'Shield',14:'Main Hand',15:'Off Hand'};
   let html = '<div style="color:var(--gold); font-size:12px; font-weight:bold; margin-bottom:0.5rem;">Equipped</div>';
-  if (Object.keys(eq).length === 0) {
+  if (items.length === 0) {
     html += '<div style="color:var(--dim); font-size:11px;">No equipment data</div>';
   } else {
-    html += '<div class="field-grid">';
-    for (const [slot, item] of Object.entries(eq)) {
-      if (item && typeof item === 'object') {
-        html += readonlyField(slot, `${item.name || item.Name || 'Unknown'} (Lv ${item.level || item.Level || '?'})`);
-      }
+    html += '<table style="font-size:11px; width:100%; border-collapse:collapse;">';
+    html += '<tr><th style="text-align:left; padding:2px 6px;">Slot</th><th style="text-align:left; padding:2px 6px;">Item</th><th style="text-align:left; padding:2px 6px;">Stats</th></tr>';
+    for (const item of items) {
+      const slotNum = item.equippedSlot ?? item.slot ?? 0;
+      const slotName = SLOT_NAMES[slotNum] || `Slot ${slotNum}`;
+      const name = item.name || item.Name || 'Unknown';
+      const stats = [];
+      if (item.weaponPower) stats.push(`WP:${item.weaponPower}`);
+      if (item.armorClass) stats.push(`AC:${item.armorClass}`);
+      if (item.strengthBonus) stats.push(`STR:+${item.strengthBonus}`);
+      if (item.dexterityBonus) stats.push(`DEX:+${item.dexterityBonus}`);
+      if (item.agilityBonus) stats.push(`AGI:+${item.agilityBonus}`);
+      if (item.constitutionBonus) stats.push(`CON:+${item.constitutionBonus}`);
+      if (item.intelligenceBonus) stats.push(`INT:+${item.intelligenceBonus}`);
+      if (item.wisdomBonus) stats.push(`WIS:+${item.wisdomBonus}`);
+      if (item.charismaBonus) stats.push(`CHA:+${item.charismaBonus}`);
+      if (item.defenseBonus) stats.push(`DEF:+${item.defenseBonus}`);
+      if (item.staminaBonus) stats.push(`STA:+${item.staminaBonus}`);
+      html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">`;
+      html += `<td style="padding:2px 6px; color:var(--dim);">${escapeHtml(slotName)}</td>`;
+      html += `<td style="padding:2px 6px;">${escapeHtml(name)}</td>`;
+      html += `<td style="padding:2px 6px; color:var(--cyan); font-size:10px;">${stats.join(' ') || '-'}</td>`;
+      html += `</tr>`;
     }
-    html += '</div>';
+    html += '</table>';
   }
 
   html += '<div style="color:var(--gold); font-size:12px; font-weight:bold; margin: 1rem 0 0.5rem;">Inventory</div>';

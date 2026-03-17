@@ -3336,7 +3336,7 @@ public partial class MagicShopLocation : BaseLocation
             player.Gold -= mpTotalWithTax;
             player.ManaPotions += qty;
 
-            DisplayMessage(Loc.Get("magic_shop.mana_deal", $"{qty}"), "bright_green");
+            DisplayMessage(Loc.Get("magic_shop.mana_deal", _ownerName, $"{qty}"), "bright_green");
             DisplayMessage(Loc.Get("magic_shop.potion_total", $"{mpTotalWithTax:N0}"), "gray");
 
             player.Statistics?.RecordGoldSpent(mpTotalWithTax);

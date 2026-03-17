@@ -21,7 +21,7 @@ namespace UsurperRemake.Server;
 public static class MudChatSystem
 {
     private static readonly string[] ChatCommands = { "say", "s", "shout", "tell", "t", "emote", "me", "gossip", "gos",
-        "guild", "gcreate", "ginvite", "gleave", "gkick", "ginfo", "gc", "gbank" };
+        "guild", "gcreate", "ginvite", "gleave", "gkick", "ginfo", "gc", "gbank", "gwithdraw", "gdeposit", "grank", "gtransfer" };
 
     /// <summary>
     /// Try to process a slash command as a MUD chat command.
@@ -143,6 +143,14 @@ public static class MudChatSystem
                 return HandleGuildChat(username, args, terminal);
             case "gbank":
                 return HandleGuildBank(username, args, terminal);
+            case "gwithdraw":
+                return HandleGuildWithdrawItem(username, args, terminal);
+            case "gdeposit":
+                return HandleGuildDepositItem(username, args, terminal);
+            case "grank":
+                return HandleGuildRank(username, args, terminal);
+            case "gtransfer":
+                return HandleGuildTransfer(username, args, terminal);
 
             default:
                 return false; // Not a MUD chat command
@@ -452,6 +460,10 @@ public static class MudChatSystem
                     ? char.ToUpper(rawName[0]) + rawName.Substring(1)
                     : rawName;
 
+                // Prepend noble title (Sir/Dame) for knighted players
+                if (player?.IsKnighted == true)
+                    name = $"{player.NobleTitle} {name}";
+
                 // Title priority: custom > wizard rank > god rank > (none)
                 string title = "";
                 if (!string.IsNullOrEmpty(player?.MudTitle))
@@ -552,7 +564,7 @@ public static class MudChatSystem
                 else
                 {
                     terminal.SetColor("bright_green");
-                    terminal.WriteLine($"  You joined the guild [{guildInvite.GuildName}]!");
+                    terminal.WriteLine($"  {Systems.Loc.Get("guild.invite_accepted", guildInvite.GuildDisplayName)}");
                 }
                 return true;
             }
@@ -609,7 +621,7 @@ public static class MudChatSystem
             {
                 guildSystemDeny.DeclineInvite(username);
                 terminal.SetColor("yellow");
-                terminal.WriteLine($"  You declined the guild invite from {guildInvite.InviterName}.");
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.invite_declined", guildInvite.InviterName)}");
                 return true;
             }
         }
@@ -1013,59 +1025,68 @@ public static class MudChatSystem
     private static bool HandleGuildInfo(string username, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
         if (guildName == null)
         {
             terminal.SetColor("yellow");
-            terminal.WriteLine("  You are not in a guild.");
-            terminal.WriteLine("  /gcreate <name> — create a guild (10,000 gold)");
-            terminal.WriteLine("  /ginfo <name>   — look up a guild");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_no_guild_create")}");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_no_guild_info")}");
             return true;
         }
 
         var info = guild.GetGuildInfo(guildName);
-        if (info == null) { terminal.WriteLine("  Guild not found.", "red"); return true; }
+        if (info == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_found")}", "red"); return true; }
 
         terminal.SetColor("bright_yellow");
-        terminal.WriteLine($"  Guild: {info.DisplayName}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_guild", info.DisplayName)}");
         if (!string.IsNullOrEmpty(info.Motto))
-            terminal.WriteLine($"  Motto: \"{info.Motto}\"");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.label_motto", info.Motto)}");
         terminal.SetColor("cyan");
-        terminal.WriteLine($"  Leader: {info.LeaderUsername} | Members: {info.MemberCount}/{Systems.GuildSystem.MaxGuildMembers}");
-        terminal.WriteLine($"  Bank: {info.BankGold:N0} gold");
+        string leaderDisplay = info.Members.FirstOrDefault(m => m.Rank == "Leader")?.DisplayName ?? info.LeaderUsername;
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_leader_members", leaderDisplay, info.MemberCount, Systems.GuildSystem.MaxGuildMembers)}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_bank_gold", info.BankGold.ToString("N0"))}");
         double bonus = Math.Min(info.MemberCount * Systems.GuildSystem.GuildXPBonusPerMember, Systems.GuildSystem.MaxGuildXPBonus) * 100;
-        terminal.WriteLine($"  Guild XP Bonus: +{bonus:F0}%");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_xp_bonus", bonus.ToString("F0"))}");
+        var bankItems = guild.GetBankItems(guildName);
+        if (bankItems.Count > 0)
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.label_bank_items", bankItems.Count, Systems.GuildSystem.MaxBankItems)}");
         terminal.SetColor("gray");
-        terminal.WriteLine("  Members:");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_members")}");
         foreach (var m in info.Members)
         {
-            string rankTag = m.Rank == "Leader" ? " [Leader]" : "";
+            string rankTag = m.Rank != "Member" ? $" [{m.Rank}]" : "";
             terminal.WriteLine($"    {m.DisplayName}{rankTag}");
         }
+        terminal.SetColor("gray");
+        terminal.WriteLine("");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_gbank")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_gdeposit")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_grank")}");
         return true;
     }
 
     private static bool HandleGuildCreate(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            terminal.WriteLine("  Usage: /gcreate <guild name>", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gcreate")}", "yellow");
             return true;
         }
 
         // Check gold
         var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
         var player = session?.Context?.Engine?.CurrentPlayer;
-        if (player == null) { terminal.WriteLine("  Cannot access your character.", "red"); return true; }
+        if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
 
         if (player.Gold < Systems.GuildSystem.GuildCreationCost)
         {
-            terminal.WriteLine($"  Creating a guild costs {Systems.GuildSystem.GuildCreationCost:N0} gold. You have {player.Gold:N0}.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.create_cost", Systems.GuildSystem.GuildCreationCost.ToString("N0"), player.Gold.ToString("N0"))}", "yellow");
             return true;
         }
 
@@ -1080,11 +1101,11 @@ public static class MudChatSystem
         player.Gold -= Systems.GuildSystem.GuildCreationCost;
         _ = Systems.SaveSystem.Instance.AutoSave(player);
         terminal.SetColor("bright_green");
-        terminal.WriteLine($"  Guild '{guildName}' created! You are the guild leader.");
-        terminal.WriteLine("  Use /ginvite <player> to recruit members.");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.created", guildName)}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_ginvite")}");
 
         // Broadcast
-        try { MudServer.Instance?.BroadcastToAll($"\r\n\x1b[1;33m  {GetChatDisplayName(username)} has founded the guild [{guildName}]!\x1b[0m\r\n", excludeUsername: username); }
+        try { MudServer.Instance?.BroadcastToAll($"\r\n\x1b[1;33m  {Systems.Loc.Get("guild.broadcast_founded", GetChatDisplayName(username), guildName)}\x1b[0m\r\n", excludeUsername: username); }
         catch { }
 
         return true;
@@ -1093,20 +1114,21 @@ public static class MudChatSystem
     private static bool HandleGuildInvite(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
-        if (guildName == null) { terminal.WriteLine("  You are not in a guild.", "yellow"); return true; }
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
 
-        if (!guild.IsGuildLeader(username, guildName))
+        string inviterRank = guild.GetMemberRank(username);
+        if (!Systems.GuildSystem.RankCanInvite(inviterRank))
         {
-            terminal.WriteLine("  Only the guild leader can invite members.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.only_leader_officer_invite")}", "yellow");
             return true;
         }
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            terminal.WriteLine("  Usage: /ginvite <player>", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_ginvite")}", "yellow");
             return true;
         }
 
@@ -1114,40 +1136,44 @@ public static class MudChatSystem
         var targetSession = MudServer.Instance?.ActiveSessions.TryGetValue(target.ToLowerInvariant(), out var ts) == true ? ts : null;
         if (targetSession == null)
         {
-            terminal.WriteLine($"  Player '{target}' is not online.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.player_not_online", target)}", "yellow");
             return true;
         }
 
         // Check if target is already in a guild
         if (guild.GetPlayerGuild(target.ToLowerInvariant()) != null)
         {
-            terminal.WriteLine($"  {target} is already in a guild.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.player_already_in_guild", target)}", "yellow");
             return true;
         }
 
-        guild.SendInvite(target, guildName, GetChatDisplayName(username));
+        // Get display name for the guild
+        var guildInfo = guild.GetGuildInfo(guildName);
+        string guildDisplayName = guildInfo?.DisplayName ?? guildName;
+
+        guild.SendInvite(target, guildName, GetChatDisplayName(username), guildDisplayName);
 
         // Notify target
         try
         {
             targetSession.Context?.Terminal?.SetColor("bright_yellow");
-            targetSession.Context?.Terminal?.WriteLine($"\r\n  {GetChatDisplayName(username)} has invited you to guild [{guildName}]!");
-            targetSession.Context?.Terminal?.WriteLine("  Type /accept to join or /deny to decline.\r\n");
+            targetSession.Context?.Terminal?.WriteLine($"\r\n  {Systems.Loc.Get("guild.invite_received", GetChatDisplayName(username), guildDisplayName)}");
+            targetSession.Context?.Terminal?.WriteLine($"  {Systems.Loc.Get("guild.invite_accept_deny")}\r\n");
         }
         catch { }
 
         terminal.SetColor("bright_green");
-        terminal.WriteLine($"  Guild invite sent to {target}.");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.invite_sent", target)}");
         return true;
     }
 
     private static bool HandleGuildLeave(string username, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
-        if (guildName == null) { terminal.WriteLine("  You are not in a guild.", "yellow"); return true; }
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
 
         // Broadcast to guild before leaving
         var online = guild.GetOnlineGuildMembers(guildName);
@@ -1157,7 +1183,7 @@ public static class MudChatSystem
         if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
 
         terminal.SetColor("bright_green");
-        terminal.WriteLine($"  You have left the guild.");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.you_left")}");
 
         // Notify remaining online members
         foreach (var member in online)
@@ -1167,7 +1193,7 @@ public static class MudChatSystem
             try
             {
                 memberSession?.Context?.Terminal?.SetColor("yellow");
-                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {displayName} has left the guild.\r\n");
+                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {Systems.Loc.Get("guild.member_left", displayName)}\r\n");
             }
             catch { }
         }
@@ -1177,34 +1203,34 @@ public static class MudChatSystem
     private static bool HandleGuildKick(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
-        if (guildName == null) { terminal.WriteLine("  You are not in a guild.", "yellow"); return true; }
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
 
         if (!guild.IsGuildLeader(username, guildName))
         {
-            terminal.WriteLine("  Only the guild leader can kick members.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.only_leader_kick")}", "yellow");
             return true;
         }
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            terminal.WriteLine("  Usage: /gkick <player>", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gkick")}", "yellow");
             return true;
         }
 
         string target = args.Trim();
         if (string.Equals(target, username, StringComparison.OrdinalIgnoreCase))
         {
-            terminal.WriteLine("  You can't kick yourself. Use /gleave instead.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_kick_self")}", "yellow");
             return true;
         }
 
         var targetGuild = guild.GetPlayerGuild(target);
         if (!string.Equals(targetGuild, guildName, StringComparison.OrdinalIgnoreCase))
         {
-            terminal.WriteLine($"  {target} is not in your guild.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_your_guild", target)}", "yellow");
             return true;
         }
 
@@ -1212,16 +1238,19 @@ public static class MudChatSystem
         if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
 
         terminal.SetColor("bright_green");
-        terminal.WriteLine($"  {target} has been kicked from the guild.");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.player_kicked", target)}");
 
         // Notify kicked player
         var targetSession = MudServer.Instance?.ActiveSessions.TryGetValue(target.ToLowerInvariant(), out var ts) == true ? ts : null;
         try
         {
             targetSession?.Context?.Terminal?.SetColor("bright_red");
-            targetSession?.Context?.Terminal?.WriteLine($"\r\n  You have been kicked from guild [{guildName}] by {GetChatDisplayName(username)}.\r\n");
+            targetSession?.Context?.Terminal?.WriteLine($"\r\n  {Systems.Loc.Get("guild.you_were_kicked", guildName, GetChatDisplayName(username))}\r\n");
         }
         catch { }
+
+        // Notify remaining guild members
+        NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_kicked", GetChatDisplayName(username), target));
 
         return true;
     }
@@ -1229,31 +1258,32 @@ public static class MudChatSystem
     private static bool HandleGuildLookup(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            terminal.WriteLine("  Usage: /ginfo <guild name>", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_ginfo")}", "yellow");
             return true;
         }
 
         var info = guild.GetGuildInfo(args.Trim());
         if (info == null)
         {
-            terminal.WriteLine($"  Guild '{args.Trim()}' not found.", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.lookup_not_found", args.Trim())}", "yellow");
             return true;
         }
 
         terminal.SetColor("bright_yellow");
-        terminal.WriteLine($"  Guild: {info.DisplayName}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_guild", info.DisplayName)}");
         if (!string.IsNullOrEmpty(info.Motto))
-            terminal.WriteLine($"  Motto: \"{info.Motto}\"");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.label_motto", info.Motto)}");
         terminal.SetColor("cyan");
-        terminal.WriteLine($"  Leader: {info.LeaderUsername} | Members: {info.MemberCount}/{Systems.GuildSystem.MaxGuildMembers}");
+        string leaderLookup = info.Members.FirstOrDefault(m => m.Rank == "Leader")?.DisplayName ?? info.LeaderUsername;
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.label_leader_members", leaderLookup, info.MemberCount, Systems.GuildSystem.MaxGuildMembers)}");
         terminal.SetColor("gray");
         foreach (var m in info.Members)
         {
-            string rankTag = m.Rank == "Leader" ? " [Leader]" : "";
+            string rankTag = m.Rank != "Member" ? $" [{m.Rank}]" : "";
             terminal.WriteLine($"    {m.DisplayName}{rankTag}");
         }
         return true;
@@ -1262,17 +1292,18 @@ public static class MudChatSystem
     private static bool HandleGuildChat(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
-        if (guildName == null) { terminal.WriteLine("  You are not in a guild.", "yellow"); return true; }
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
 
         if (string.IsNullOrWhiteSpace(args))
         {
-            terminal.WriteLine("  Usage: /gc <message>", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gc")}", "yellow");
             return true;
         }
 
+        string chatLabel = Systems.Loc.Get("guild.chat_label");
         string displayName = GetChatDisplayName(username);
         var online = guild.GetOnlineGuildMembers(guildName);
 
@@ -1283,62 +1314,368 @@ public static class MudChatSystem
             try
             {
                 memberSession?.Context?.Terminal?.SetColor("bright_green");
-                memberSession?.Context?.Terminal?.WriteLine($"\r\n  [Guild] {displayName}: {args}\r\n");
+                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {chatLabel} {displayName}: {args}\r\n");
             }
             catch { }
         }
 
-        terminal.WriteLine($"  [Guild] You: {args}", "bright_green");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.chat_you", args)}", "bright_green");
         return true;
     }
 
     private static bool HandleGuildBank(string username, string args, TerminalEmulator terminal)
     {
         var guild = Systems.GuildSystem.Instance;
-        if (guild == null) { terminal.WriteLine("  Guild system is not available.", "yellow"); return true; }
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
 
         var guildName = guild.GetPlayerGuild(username);
-        if (guildName == null) { terminal.WriteLine("  You are not in a guild.", "yellow"); return true; }
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
 
-        if (string.IsNullOrWhiteSpace(args) || !long.TryParse(args.Trim(), out long amount) || amount <= 0)
+        var parts = (args ?? "").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        string subCommand = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        string subArgs = parts.Length > 1 ? parts[1].Trim() : "";
+
+        if (subCommand == "deposit" || subCommand == "d")
         {
-            terminal.WriteLine("  Usage: /gbank <amount> — deposit gold into guild bank", "yellow");
+            if (!long.TryParse(subArgs, out long amount) || amount <= 0)
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gbank_deposit")}", "yellow");
+                return true;
+            }
+
+            var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
+            var player = session?.Context?.Engine?.CurrentPlayer;
+            if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
+
+            if (player.Gold < amount)
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.only_have_gold", player.Gold.ToString("N0"))}", "yellow");
+                return true;
+            }
+
+            var error = guild.DepositGold(username, amount);
+            if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
+
+            player.Gold -= amount;
+            _ = Systems.SaveSystem.Instance.AutoSave(player);
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.deposited_gold", amount.ToString("N0"))}");
+
+            NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_deposited_gold", GetChatDisplayName(username), amount.ToString("N0")));
+            return true;
+        }
+
+        if (subCommand == "withdraw" || subCommand == "w")
+        {
+            if (!long.TryParse(subArgs, out long amount) || amount <= 0)
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gbank_withdraw")}", "yellow");
+                return true;
+            }
+
+            var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
+            var player = session?.Context?.Engine?.CurrentPlayer;
+            if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
+
+            var error = guild.WithdrawGold(username, amount);
+            if (error != null) { terminal.WriteLine($"  {error}", "yellow"); return true; }
+
+            player.Gold += amount;
+            _ = Systems.SaveSystem.Instance.AutoSave(player);
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.withdrew_gold", amount.ToString("N0"))}");
+
+            NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_withdrew_gold", GetChatDisplayName(username), amount.ToString("N0")));
+            return true;
+        }
+
+        if (subCommand == "items" || subCommand == "i")
+        {
+            var items = guild.GetBankItems(guildName);
+            if (items.Count == 0)
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.bank_no_items")}", "gray");
+                return true;
+            }
+            terminal.SetColor("bright_yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.bank_items_header", items.Count, Systems.GuildSystem.MaxBankItems)}");
+            terminal.SetColor("cyan");
+            for (int i = 0; i < items.Count; i++)
+            {
+                terminal.WriteLine($"    {Systems.Loc.Get("guild.bank_items_entry", items[i].Id, items[i].ItemName, items[i].DepositedBy)}");
+            }
+            terminal.SetColor("gray");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_gwithdraw_item")}");
+            return true;
+        }
+
+        // Legacy: /gbank <number> treated as deposit for backwards compatibility
+        if (long.TryParse(subCommand, out long legacyAmount) && legacyAmount > 0)
+        {
+            var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
+            var player = session?.Context?.Engine?.CurrentPlayer;
+            if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
+
+            if (player.Gold < legacyAmount)
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.only_have_gold", player.Gold.ToString("N0"))}", "yellow");
+                return true;
+            }
+
+            var error = guild.DepositGold(username, legacyAmount);
+            if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
+
+            player.Gold -= legacyAmount;
+            _ = Systems.SaveSystem.Instance.AutoSave(player);
+            terminal.SetColor("bright_green");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.deposited_gold", legacyAmount.ToString("N0"))}");
+
+            NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_deposited_gold", GetChatDisplayName(username), legacyAmount.ToString("N0")));
+            return true;
+        }
+
+        // Show usage
+        var info = guild.GetGuildInfo(guildName);
+        terminal.SetColor("bright_yellow");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.bank_gold_label", (info?.BankGold ?? 0).ToString("N0"))}");
+        terminal.SetColor("gray");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_bank_deposit")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_bank_withdraw")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_bank_items")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_deposit_item")}");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.hint_withdraw_item")}");
+        return true;
+    }
+
+    private static bool HandleGuildDepositItem(string username, string args, TerminalEmulator terminal)
+    {
+        var guild = Systems.GuildSystem.Instance;
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
+
+        var guildName = guild.GetPlayerGuild(username);
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
+
+        var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
+        var player = session?.Context?.Engine?.CurrentPlayer;
+        if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
+
+        // Check if player has items in inventory (backpack)
+        var inventory = player.Inventory;
+        if (inventory == null || inventory.Count == 0)
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.your_inventory_empty")}", "yellow");
+            return true;
+        }
+
+        // If no arg, show numbered list
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            terminal.SetColor("cyan");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.select_item_deposit")}");
+            for (int i = 0; i < inventory.Count; i++)
+            {
+                terminal.WriteLine($"    {i + 1}. {inventory[i].Name}");
+            }
+            terminal.SetColor("gray");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gdeposit")}");
+            return true;
+        }
+
+        if (!int.TryParse(args.Trim(), out int choice) || choice < 1 || choice > inventory.Count)
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.invalid_choice", inventory.Count)}", "yellow");
+            return true;
+        }
+
+        var item = inventory[choice - 1];
+        string itemJson = System.Text.Json.JsonSerializer.Serialize(item);
+        var error = guild.DepositItem(username, item.Name, itemJson);
+        if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
+
+        inventory.RemoveAt(choice - 1);
+        _ = Systems.SaveSystem.Instance.AutoSave(player);
+        terminal.SetColor("bright_green");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.deposited_item", item.Name)}");
+
+        NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_deposited_item", GetChatDisplayName(username), item.Name));
+        return true;
+    }
+
+    private static bool HandleGuildWithdrawItem(string username, string args, TerminalEmulator terminal)
+    {
+        var guild = Systems.GuildSystem.Instance;
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
+
+        var guildName = guild.GetPlayerGuild(username);
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
+
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            // Show bank items
+            var items = guild.GetBankItems(guildName);
+            if (items.Count == 0) { terminal.WriteLine($"  {Systems.Loc.Get("guild.bank_no_items")}", "gray"); return true; }
+
+            terminal.SetColor("cyan");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.bank_items_header", items.Count, Systems.GuildSystem.MaxBankItems)}");
+            foreach (var item in items)
+                terminal.WriteLine($"    {Systems.Loc.Get("guild.bank_items_entry", item.Id, item.ItemName, item.DepositedBy)}");
+            terminal.SetColor("gray");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gwithdraw")}");
+            return true;
+        }
+
+        if (!int.TryParse(args.Trim(), out int itemId))
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gwithdraw_num")}", "yellow");
             return true;
         }
 
         var session = MudServer.Instance?.ActiveSessions.TryGetValue(username.ToLowerInvariant(), out var s) == true ? s : null;
         var player = session?.Context?.Engine?.CurrentPlayer;
-        if (player == null) { terminal.WriteLine("  Cannot access your character.", "red"); return true; }
+        if (player == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.cannot_access_character")}", "red"); return true; }
 
-        if (player.Gold < amount)
+        string? itemJson = guild.WithdrawItem(username, itemId, out string? errorMessage);
+        if (itemJson == null) { terminal.WriteLine($"  {errorMessage}", "yellow"); return true; }
+
+        try
         {
-            terminal.WriteLine($"  You only have {player.Gold:N0} gold.", "yellow");
+            var item = System.Text.Json.JsonSerializer.Deserialize<global::Item>(itemJson);
+            if (item != null)
+            {
+                player.Inventory.Add(item);
+                _ = Systems.SaveSystem.Instance.AutoSave(player);
+                terminal.SetColor("bright_green");
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.withdrew_item", item.Name)}");
+
+                NotifyGuildMembers(guild, guildName, username, Systems.Loc.Get("guild.broadcast_withdrew_item", GetChatDisplayName(username), item.Name));
+            }
+            else
+            {
+                terminal.WriteLine($"  {Systems.Loc.Get("guild.deserialize_failed")}", "red");
+            }
+        }
+        catch (Exception ex)
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.process_item_failed", ex.Message)}", "red");
+        }
+        return true;
+    }
+
+    private static bool HandleGuildRank(string username, string args, TerminalEmulator terminal)
+    {
+        var guild = Systems.GuildSystem.Instance;
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
+
+        var guildName = guild.GetPlayerGuild(username);
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
+
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            terminal.SetColor("gray");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_grank")}");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.ranks_list")}");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.only_leader_ranks")}");
             return true;
         }
 
-        var error = guild.DepositGold(username, amount);
-        if (error != null) { terminal.WriteLine($"  {error}", "red"); return true; }
+        var parts = args.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_grank")}", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.ranks_list")}", "gray");
+            return true;
+        }
 
-        player.Gold -= amount;
-        _ = Systems.SaveSystem.Instance.AutoSave(player);
+        string targetPlayer = parts[0];
+        string newRank = parts[1].Trim();
+        // Normalize rank casing
+        if (newRank.Equals("officer", StringComparison.OrdinalIgnoreCase)) newRank = "Officer";
+        else if (newRank.Equals("member", StringComparison.OrdinalIgnoreCase)) newRank = "Member";
+
+        var error = guild.SetMemberRank(username, targetPlayer, newRank);
+        if (error != null) { terminal.WriteLine($"  {error}", "yellow"); return true; }
+
         terminal.SetColor("bright_green");
-        terminal.WriteLine($"  Deposited {amount:N0} gold into the guild bank.");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.rank_set", targetPlayer, newRank)}");
 
-        // Notify guild
-        var online = guild.GetOnlineGuildMembers(guildName);
-        string displayName = GetChatDisplayName(username);
-        foreach (var member in online)
+        // Notify target
+        var targetSession = MudServer.Instance?.ActiveSessions.TryGetValue(targetPlayer.ToLowerInvariant(), out var ts) == true ? ts : null;
+        try
+        {
+            targetSession?.Context?.Terminal?.SetColor("bright_yellow");
+            targetSession?.Context?.Terminal?.WriteLine($"\r\n  {Systems.Loc.Get("guild.rank_changed_notification", newRank, GetChatDisplayName(username))}\r\n");
+        }
+        catch { }
+
+        return true;
+    }
+
+    private static bool HandleGuildTransfer(string username, string args, TerminalEmulator terminal)
+    {
+        var guild = Systems.GuildSystem.Instance;
+        if (guild == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_available")}", "yellow"); return true; }
+
+        var guildName = guild.GetPlayerGuild(username);
+        if (guildName == null) { terminal.WriteLine($"  {Systems.Loc.Get("guild.not_in_guild")}", "yellow"); return true; }
+
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.usage_gtransfer")}", "yellow");
+            terminal.WriteLine($"  {Systems.Loc.Get("guild.transfer_hint")}", "gray");
+            return true;
+        }
+
+        string target = args.Trim();
+        var error = guild.TransferLeadership(username, target);
+        if (error != null) { terminal.WriteLine($"  {error}", "yellow"); return true; }
+
+        terminal.SetColor("bright_green");
+        terminal.WriteLine($"  {Systems.Loc.Get("guild.transfer_done", target)}");
+
+        // Notify remaining guild members (exclude both actor and target to avoid double-notification)
+        string transferMsg = Systems.Loc.Get("guild.broadcast_transfer", GetChatDisplayName(username), target);
+        var onlineTransfer = guild.GetOnlineGuildMembers(guildName);
+        foreach (var member in onlineTransfer)
         {
             if (string.Equals(member, username, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.Equals(member, target, StringComparison.OrdinalIgnoreCase)) continue;
             var memberSession = MudServer.Instance?.ActiveSessions.TryGetValue(member.ToLowerInvariant(), out var ms) == true ? ms : null;
             try
             {
                 memberSession?.Context?.Terminal?.SetColor("cyan");
-                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {displayName} deposited {amount:N0} gold into the guild bank.\r\n");
+                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {transferMsg}\r\n");
             }
             catch { }
         }
 
+        // Notify the new leader directly with a personalized message
+        var targetSession = MudServer.Instance?.ActiveSessions.TryGetValue(target.ToLowerInvariant(), out var ts) == true ? ts : null;
+        try
+        {
+            targetSession?.Context?.Terminal?.SetColor("bright_yellow");
+            targetSession?.Context?.Terminal?.WriteLine($"\r\n  {Systems.Loc.Get("guild.transfer_notification", GetChatDisplayName(username))}\r\n");
+        }
+        catch { }
+
         return true;
+    }
+
+    /// <summary>
+    /// Notify all online guild members (except the actor) about a guild bank action.
+    /// </summary>
+    private static void NotifyGuildMembers(Systems.GuildSystem guild, string guildName, string excludeUsername, string message)
+    {
+        var online = guild.GetOnlineGuildMembers(guildName);
+        foreach (var member in online)
+        {
+            if (string.Equals(member, excludeUsername, StringComparison.OrdinalIgnoreCase)) continue;
+            var memberSession = MudServer.Instance?.ActiveSessions.TryGetValue(member.ToLowerInvariant(), out var ms) == true ? ms : null;
+            try
+            {
+                memberSession?.Context?.Terminal?.SetColor("cyan");
+                memberSession?.Context?.Terminal?.WriteLine($"\r\n  {message}\r\n");
+            }
+            catch { }
+        }
     }
 }
