@@ -5,15 +5,15 @@ using System.Threading.Tasks;
 using UsurperRemake.Systems;
 
 /// <summary>
-/// Quest Hall Location - Where players can view and claim quests/bounties
-/// Replaces the old King-created quest system with NPC-generated bounties
+/// Contract Exchange - where players browse, accept, and close live contracts.
+/// Preserves the underlying quest system while presenting it as a deniable job market.
 /// </summary>
 public class QuestHallLocation : BaseLocation
 {
     public QuestHallLocation(TerminalEmulator terminal) : base()
     {
-        LocationName = "Quest Hall";
-        LocationDescription = "The royal quest board where bounties and missions are posted.";
+        LocationName = "Contract Exchange";
+        LocationDescription = "A broker terminal where contracts, hotlists, and deniable violence are traded.";
     }
 
     public override async Task EnterLocation(Character player, TerminalEmulator term)
@@ -38,7 +38,7 @@ public class QuestHallLocation : BaseLocation
         terminal.WriteLine(Loc.Get("quest_hall.leave"), "gray");
         await Task.Delay(500);
 
-        // Return to Main Street via exception (standard navigation pattern)
+        // Return to the hub via exception (standard navigation pattern)
         throw new LocationExitException(GameLocation.MainStreet);
     }
 

@@ -7,37 +7,37 @@ using UsurperRemake.BBS;
 namespace UsurperRemake.Locations;
 
 /// <summary>
-/// The Level Master – lets players advance in level when they have enough experience.
-/// Features three alignment-based masters with hidden stat bonuses:
-///  - Good Master: Grants bonus Wisdom and Charisma
-///  - Neutral Master: Grants bonus Intelligence and Dexterity
-///  - Evil Master: Grants bonus Strength and Constitution
+/// The Training Node lets players promote their build once they have enough runtime.
+/// Three alignment-based handlers shape hidden stat bonuses:
+///  - Good handler: bonus Wisdom and Charisma
+///  - Neutral handler: bonus Intelligence and Dexterity
+///  - Evil handler: bonus Strength and Constitution
 ///
-/// Each class also receives stat bonuses appropriate to their role:
+/// Each class also receives role-appropriate stat bonuses:
 ///  - Magic classes (Magician, Cleric, Sage, Alchemist): +Intelligence, +Wisdom, +Mana
 ///  - Warrior classes (Warrior, Barbarian, Paladin): +Strength, +Constitution, +HP
 ///  - Agile classes (Assassin, Ranger, Jester, Bard): +Dexterity, +Agility, +Stamina
 /// </summary>
 public class LevelMasterLocation : BaseLocation
 {
-    // The three alignment-based masters
+    // Alignment-based handlers
     private static readonly MasterInfo GoodMaster = new(
-        "Seraphina the Radiant",
-        "A celestial figure surrounded by soft golden light",
+        "Aegis-9",
+        "A calm handler framed by clean holo-schematics and med-white light",
         "bright_yellow",
         PlayerAlignment.Good
     );
 
     private static readonly MasterInfo NeutralMaster = new(
-        "Zharkon the Grey",
-        "A mysterious sage wrapped in grey robes, eyes glowing with arcane knowledge",
+        "Greywire",
+        "A patient analyst in a weathered coat, surrounded by rolling diagnostics and tactical overlays",
         "gray",
         PlayerAlignment.Neutral
     );
 
     private static readonly MasterInfo EvilMaster = new(
-        "Malachar the Dark",
-        "A shadowy figure emanating an aura of dark power",
+        "Blackhand Rook",
+        "A scarred handler in a blackout booth, backlit by red warning glyphs and live threat maps",
         "bright_red",
         PlayerAlignment.Evil
     );
@@ -45,8 +45,8 @@ public class LevelMasterLocation : BaseLocation
     private MasterInfo currentMaster;
     private PlayerAlignment playerAlignment;
 
-    public LevelMasterLocation() : base(GameLocation.Master, "Level Master's Sanctum",
-        "A mystical chamber where warriors seek to transcend their limits.")
+    public LevelMasterLocation() : base(GameLocation.Master, "Training Node",
+        "A hardened doctrine cell where operators refine builds, routines, and field discipline.")
     {
     }
 
@@ -104,7 +104,7 @@ public class LevelMasterLocation : BaseLocation
         };
     }
 
-    protected override string GetMudPromptName() => "Level Master";
+    protected override string GetMudPromptName() => "Training Node";
 
     private void DisplayLocationSR()
     {

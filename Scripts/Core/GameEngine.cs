@@ -2841,7 +2841,7 @@ public partial class GameEngine
         {
             goldReward = 2500;
             achievementId = "dedicated_adventurer";
-            specialMessage = "One full week! You're a Dedicated Adventurer!";
+            specialMessage = "One full week! You're a dedicated operator!";
         }
         else if (streak == 3)
         {
@@ -3580,13 +3580,12 @@ public partial class GameEngine
 
         await Task.Delay(1500);
 
-        // Online news: announce new adventurer and update display name
+        // Online news: announce new operator and update display name
         if (UsurperRemake.Systems.OnlineStateManager.IsActive)
         {
             var displayName = currentPlayer.Name2 ?? currentPlayer.Name1;
-            var className = currentPlayer.Class.ToString();
             _ = UsurperRemake.Systems.OnlineStateManager.Instance!.AddNews(
-                $"A new adventurer arrives! {displayName} the {className} begins their journey.", "quest");
+                $"A new operator boots up! {displayName} begins a fresh run on the Heap.", "quest");
             // Update online_players display_name from BBS username to character name
             await OnlineStateManager.Instance!.UpdateDisplayName(displayName);
 
@@ -5892,17 +5891,17 @@ public partial class GameEngine
 
         terminal.WriteLine("", "white");
         if (!GameConfig.ScreenReaderMode)
-            terminal.WriteLine("─── News from the Realm ───", "bright_yellow");
+            terminal.WriteLine("─── Lattice Feed Catch-Up ───", "bright_yellow");
         else
-            terminal.WriteLine("--- News from the Realm ---", "bright_yellow");
+            terminal.WriteLine("--- Lattice Feed Catch-Up ---", "bright_yellow");
         terminal.WriteLine("", "white");
 
         ShowCatchUpCategory("Deaths & Departures", deaths, maxPerCat, "red");
         ShowCatchUpCategory("Births & Coming of Age", births, maxPerCat, "bright_green");
-        ShowCatchUpCategory("Royal Affairs", political, maxPerCat, "bright_yellow");
+        ShowCatchUpCategory("Power Plays", political, maxPerCat, "bright_yellow");
         ShowCatchUpCategory("Love & Scandal", social, maxPerCat, "bright_magenta");
-        ShowCatchUpCategory("The Outskirts", settlement, maxPerCat, "cyan");
-        ShowCatchUpCategory("World Events", worldEvents, maxPerCat, "white");
+        ShowCatchUpCategory("Heap Fringe", settlement, maxPerCat, "cyan");
+        ShowCatchUpCategory("Runtime Events", worldEvents, maxPerCat, "white");
 
         terminal.WriteLine($"  Total events: {events.Count}", "gray");
         terminal.WriteLine("", "white");
