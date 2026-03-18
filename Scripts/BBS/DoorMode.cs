@@ -926,7 +926,7 @@ namespace UsurperRemake.BBS
         /// </summary>
         private static void PrintDoorHelp()
         {
-            Console.WriteLine("Usurper Reborn - BBS Door Mode");
+            Console.WriteLine("SIGSEGV: The Heap Lands - BBS Door Mode");
             Console.WriteLine("");
             Console.WriteLine("Usage: UsurperReborn [options]");
             Console.WriteLine("");

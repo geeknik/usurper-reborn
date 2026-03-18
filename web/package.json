@@ -1,7 +1,7 @@
 {
-  "name": "usurper-web-terminal",
+  "name": "sigsegv-web-terminal",
   "version": "1.0.0",
-  "description": "WebSocket-to-SSH proxy for Usurper Reborn browser play",
+  "description": "WebSocket-to-SSH proxy for SIGSEGV browser play",
   "main": "ssh-proxy.js",
   "scripts": {
     "start": "node ssh-proxy.js"

@@ -315,7 +315,7 @@ public static class RelayClient
         await WriteAnsi(stdout, "\u001b[1;36m");
         await WriteAnsi(stdout, "╔══════════════════════════════════════════════════════════════════════════════╗\r\n");
         await WriteAnsi(stdout, "\u001b[1;37m");
-        await WriteAnsi(stdout, "║                    Welcome to Usurper Reborn Online                        ║\r\n");
+        await WriteAnsi(stdout, "║                      Welcome to SIGSEGV Online                             ║\r\n");
         await WriteAnsi(stdout, "\u001b[1;36m");
         await WriteAnsi(stdout, "╠══════════════════════════════════════════════════════════════════════════════╣\r\n");
         await WriteAnsi(stdout, "\u001b[0;37m");

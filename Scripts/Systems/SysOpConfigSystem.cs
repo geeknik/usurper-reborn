@@ -180,7 +180,7 @@ namespace UsurperRemake.Systems
     /// </summary>
     public class SysOpConfig
     {
-        public string MessageOfTheDay { get; set; } = "Thanks for playing Usurper Reborn! Report bugs with the in-game ! command.";
+        public string MessageOfTheDay { get; set; } = "SIGSEGV is in active remake. Expect sharp edges and report bugs with the in-game ! command.";
         public int DefaultDailyTurns { get; set; } = 325;
         public float XPMultiplier { get; set; } = 1.0f;
         public float GoldMultiplier { get; set; } = 1.0f;

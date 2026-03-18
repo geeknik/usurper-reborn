@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Usurper Reborn - A Modern Remake of the 1993 BBS Classic</title>
-    <meta name="description" content="A text RPG remake of the 1993 BBS door game Usurper. 60+ NPCs that live and die on their own, a 100-floor dungeon, seven gods to save or destroy, and five endings. Free and open source. Play in your browser, over SSH, or on a BBS.">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231a0a2e'/%3E%3Ctext x='16' y='22' font-family='serif' font-weight='bold' font-size='16' fill='%23ffaa00' text-anchor='middle'%3EUR%3C/text%3E%3Cpolygon points='10,7 16,3 22,7' fill='%23ffaa00'/%3E%3Cpolygon points='12,7 16,4.5 20,7' fill='%231a0a2e'/%3E%3Crect x='11' y='6' width='2' height='3' fill='%23ffaa00'/%3E%3Crect x='15' y='5' width='2' height='4' fill='%23ffaa00'/%3E%3Crect x='19' y='6' width='2' height='3' fill='%23ffaa00'/%3E%3C/svg%3E">
+    <title>SIGSEGV: The Heap Lands - Text-First Cyberpunk Roguelike</title>
+    <meta name="description" content="Manage a rogue server. Recruit operators. Conquer a hostile lattice. SIGSEGV: The Heap Lands is a text-first cyberpunk heist RPG playable in your browser, over SSH, or on a BBS.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23070d14'/%3E%3Ctext x='16' y='22' font-family='serif' font-weight='bold' font-size='16' fill='%2300e5ff' text-anchor='middle'%3ESG%3C/text%3E%3Cpath d='M8 8h16' stroke='%2300e5ff' stroke-width='2'/%3E%3Cpath d='M8 24h16' stroke='%23ffaa00' stroke-width='2'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
@@ -1360,7 +1360,7 @@
 
 <header>
     <div class="container">
-        <a href="#" class="logo">USURPER REBORN</a>
+        <a href="#" class="logo">SIGSEGV</a>
         <nav class="nav-links">
             <a href="#live-stats" data-i18n="nav.live">Live</a>
             <a href="#philosophy" data-i18n="nav.about">About</a>
@@ -1417,7 +1417,7 @@
                 <span class="dot-yellow"></span>
                 <span class="dot-green"></span>
             </div>
-            <span class="terminal-title">usurper-reborn.net</span>
+            <span class="terminal-title">sigsegv://root@heap</span>
             <button class="terminal-close" onclick="closeTerminal()" title="Close terminal">&times;</button>
         </div>
         <div id="terminal-container"></div>
@@ -1444,7 +1444,7 @@
         <p class="section-subtitle" data-i18n="philosophy.subtitle">The short version.</p>
 
         <p class="manifesto-lead" data-i18n-html="philosophy.lead">
-            I used to dial into BBSes on a 14.4k modem when I was a kid. Usurper was the game that stuck with me &mdash; not LORD, not Trade Wars, Usurper. Something about the depth of it. When Jakob Dangarden open-sourced the original Turbo Pascal code under the GPL back in 2004, I eventually stumbled on it and started thinking about what the game would be if you rebuilt it from scratch with modern tools. So I did.
+            I used to dial into BBSes on a 14.4k modem when I was a kid. Usurper was the game that stuck with me &mdash; not LORD, not Trade Wars, Usurper. When Jakob Dangarden open-sourced the original Turbo Pascal code under the GPL, that lineage got a second life. SIGSEGV is what happens when you take that history, fork it hard, and rebuild it as a generational cyberpunk heist RPG where code is law.
         </p>
 
         <div class="manifesto-grid">
@@ -1918,8 +1918,8 @@
             </div>
 
             <div class="history-entry">
-                <h3 data-i18n-html="history.reborn_title">Usurper Reborn (2024&ndash;Now)</h3>
-                <p data-i18n-html="history.reborn_desc">I (<strong style="color:var(--gold)">Jason Knight</strong>) started this project because I kept coming back to Usurper and thinking about what it could've been if the 90s hardware constraints weren't a factor. The original game had so much going on under the hood &mdash; race mechanics, class abilities, political systems &mdash; but the BBS environment limited how far any of it could go. I wanted to see what happened if you took that foundation and built on it with modern tools.<br><br>It's written in C# on .NET 8.0. All the original gameplay is in there. Then I added about 60 unique NPCs with an autonomous world simulation, a companion system, New Game+ where the NPCs gradually become aware of the loop, seven god encounters with branching dialogue, and five endings. The world simulation runs on the server 24/7 and keeps going whether anyone's logged in or not. It still runs on BBSes too &mdash; there are a couple boards on the BBS list below that have it installed as a door game right now.</p>
+                <h3 data-i18n-html="history.reborn_title">SIGSEGV: The Heap Lands (2026&ndash;Now)</h3>
+                <p data-i18n-html="history.reborn_desc">SIGSEGV starts from the open-source Usurper lineage and from Jason Knight's Usurper Reborn remake. This public fork is currently being driven by <strong style="color:var(--gold)">geeknik</strong>, who is intentionally breaking away from the fantasy throne-room loop and rebuilding the game as a text-first cyberpunk command console: rogue servers, operator crews, procedural lattices, and hacking built around code instead of button prompts.<br><br>It still runs on C# and .NET 8.0, still values BBS-era immediacy, and still ships as a keyboard-first game. But the fiction, vocabulary, mission structure, and long-term progression are being remade into something harsher, stranger, and much more systemic. This site tracks that migration in public.</p>
             </div>
         </div>
     </div>
@@ -1960,7 +1960,7 @@
             </div>
             <div class="connect-card">
                 <h3 data-i18n-html="connect.steam_title">&#9658; Steam</h3>
-                <p data-i18n="connect.steam_desc">Usurper Reborn is available on Steam. Includes bundled terminal and fonts.</p>
+                <p data-i18n="connect.steam_desc">Find SIGSEGV on Steam. Includes the bundled terminal and fonts.</p>
                 <a class="btn btn-steam" href="https://store.steampowered.com/app/4336570/" target="_blank" style="width:100%;justify-content:center;" data-i18n="connect.steam_btn">Get on Steam</a>
             </div>
             <div class="connect-card">
@@ -1976,7 +1976,7 @@
 <section id="bbs-list">
     <div class="container">
         <h2 class="section-title" data-i18n="bbs.title">// BBS LIST</h2>
-        <p class="section-subtitle" data-i18n="bbs.subtitle">BBSes that are running Usurper Reborn as a door game right now.</p>
+        <p class="section-subtitle" data-i18n="bbs.subtitle">BBSes and nodes running SIGSEGV as a door game right now.</p>
 
         <table class="bbs-table">
             <thead>
@@ -2016,7 +2016,7 @@
         </table>
 
         <div class="bbs-note">
-            <p data-i18n-html="bbs.note">Running Usurper Reborn on your board? <a href="https://github.com/binary-knight/usurper-reborn/issues" target="_blank">Let me know and I'll add you.</a></p>
+            <p data-i18n-html="bbs.note">Running SIGSEGV on your board? <a href="https://github.com/binary-knight/usurper-reborn/issues" target="_blank">Let me know and I'll add you.</a></p>
         </div>
     </div>
 </section>
@@ -2044,8 +2044,13 @@
             </div>
             <div class="credit-card">
                 <h3 data-i18n="credits.jason_name">Jason Knight</h3>
-                <div class="credit-role" data-i18n="credits.jason_role">Usurper Reborn</div>
-                <p data-i18n="credits.jason_desc">That's me. Built the C# remake, wrote all the story content, the NPC system, the world sim, the god encounters. Still actively developing it.</p>
+                <div class="credit-role" data-i18n="credits.jason_role">Creator of Usurper Reborn</div>
+                <p data-i18n="credits.jason_desc">Built the modern C# / .NET 8.0 recreation with expanded systems and deep narrative.</p>
+            </div>
+            <div class="credit-card">
+                <h3 data-i18n="credits.geeknik_name">geeknik</h3>
+                <div class="credit-role" data-i18n="credits.geeknik_role">SIGSEGV Fork Steward</div>
+                <p data-i18n="credits.geeknik_desc">Forking Usurper Reborn into SIGSEGV and driving the rebrand, lore rewrite, and long-term direction of The Heap Lands.</p>
             </div>
             <div class="credit-card">
                 <h3><a href="https://x-bit.org/" target="_blank" style="color:var(--gold);text-decoration:none;" data-i18n="credits.xbit_name">xbit</a></h3>
@@ -2088,7 +2093,7 @@
             <a href="https://github.com/binary-knight/usurper-reborn/issues" target="_blank" data-i18n="footer.bug">Report Bug</a>
             <a href="https://discord.gg/EZhwgDT6Ta" target="_blank" data-i18n="footer.discord">Discord</a>
         </div>
-        <p data-i18n-html="footer.desc">Usurper Reborn &mdash; a free, open-source remake of Usurper (1993) by Jakob Dangarden.</p>
+        <p data-i18n-html="footer.desc">SIGSEGV: The Heap Lands &mdash; a GPL-licensed fork and remake in progress, descended from Usurper (1993).</p>
         <p style="margin-top:4px;" data-i18n-html="footer.tech">GPL v2 &bull; C# / .NET 8.0 &bull; Made by one person who liked BBS games too much</p>
     </div>
 </footer>

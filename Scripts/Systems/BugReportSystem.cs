@@ -135,7 +135,7 @@ public static class BugReportSystem
             var filepath = Path.Combine(reportsDir, filename);
 
             var sb = new StringBuilder();
-            sb.AppendLine("=== USURPER REBORN BUG REPORT ===");
+            sb.AppendLine("=== SIGSEGV BUG REPORT ===");
             sb.AppendLine($"Date: {info.Timestamp}");
             sb.AppendLine($"Version: {info.GameVersion} ({info.VersionName})");
             sb.AppendLine($"Platform: {info.Platform}");
@@ -187,7 +187,7 @@ public static class BugReportSystem
             var sb = new StringBuilder();
 
             // Discord embed-style formatting
-            sb.AppendLine("**Bug Report** from Usurper Reborn");
+            sb.AppendLine("**Bug Report** from SIGSEGV");
             sb.AppendLine("```");
             sb.AppendLine($"Version:  {info.GameVersion}");
             sb.AppendLine($"Platform: {info.Platform}");

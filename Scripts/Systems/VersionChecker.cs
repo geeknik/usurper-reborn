@@ -707,7 +707,7 @@ start """" ""{exePath}""";
             var logFile = Path.Combine(appDir, "update.log");
 
             var script = $@"@echo off
-echo Usurper Reborn Auto-Updater
+echo SIGSEGV Auto-Updater
 echo ===========================
 echo.
 echo Waiting for game to close...
@@ -777,7 +777,7 @@ rd /S /Q ""{tempDir}"" 2>nul
             {
                 "#!/bin/bash",
                 $"LOGFILE=\"{logFile}\"",
-                "echo \"Usurper Reborn Auto-Updater\"",
+                "echo \"SIGSEGV Auto-Updater\"",
                 "echo \"===========================\"",
                 "echo \"\"",
                 "echo \"Waiting for game to close...\"",

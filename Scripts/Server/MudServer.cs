@@ -430,7 +430,7 @@ public class MudServer
             // Show auth menu
             if (isPlainText)
             {
-                await WriteAnsiAsync(stream, "\r\n=== Usurper Reborn Online ===\r\n", isCp437);
+                await WriteAnsiAsync(stream, "\r\n=== SIGSEGV Online ===\r\n", isCp437);
                 await WriteAnsiAsync(stream, "[L] Login\r\n", isCp437);
                 await WriteAnsiAsync(stream, "[R] Register\r\n", isCp437);
                 await WriteAnsiAsync(stream, "[Q] Quit\r\n", isCp437);
@@ -442,7 +442,7 @@ public class MudServer
                 await WriteAnsiAsync(stream, "\u001b[1;36m", isCp437);
                 await WriteAnsiAsync(stream, "╔══════════════════════════════════════════════════════════════════════════════╗\r\n", isCp437);
                 await WriteAnsiAsync(stream, "\u001b[1;37m", isCp437);
-                await WriteAnsiAsync(stream, "║                    Welcome to Usurper Reborn Online                        ║\r\n", isCp437);
+                await WriteAnsiAsync(stream, "║                      Welcome to SIGSEGV Online                             ║\r\n", isCp437);
                 await WriteAnsiAsync(stream, "\u001b[1;36m", isCp437);
                 await WriteAnsiAsync(stream, "╠══════════════════════════════════════════════════════════════════════════════╣\r\n", isCp437);
                 await WriteAnsiAsync(stream, "\u001b[0;37m", isCp437);

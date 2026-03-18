@@ -219,9 +219,9 @@ namespace UsurperRemake.UI
             "    ║                                                     ║",
             "    ║        [yellow]*[bright_cyan]     [yellow]*[bright_cyan]     [yellow]*[bright_cyan]     [yellow]*[bright_cyan]     [yellow]*[bright_cyan]              ║",
             "    ║                                                     ║",
-            "    ║   [gray]The Halls of Avarice await your arrival.[bright_cyan]        ║",
-            "    ║   [gray]Will you seek glory, wealth, or power?[bright_cyan]          ║",
-            "    ║   [gray]Choose wisely - not all who enter survive.[bright_cyan]      ║",
+            "    ║   [gray]The Heap awaits your allocation.[bright_cyan]                ║",
+            "    ║   [gray]Will you seek access, leverage, or sudo?[bright_cyan]        ║",
+            "    ║   [gray]Choose wisely - not all processes stay alive.[bright_cyan]   ║",
             "    ║                                                     ║",
             "    ╚═════════════════════════════════════════════════════╝[/]"
         };

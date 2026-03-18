@@ -36,13 +36,13 @@ public class UsurperHistorySystem
 
         if (GameConfig.ScreenReaderMode)
         {
-            terminal.WriteLine("USURPER HISTORY - A Journey Through Time", "bright_cyan");
+            terminal.WriteLine("PROJECT LINEAGE - A Fork Through Time", "bright_cyan");
         }
         else
         {
             terminal.SetColor("bright_cyan");
             terminal.WriteLine("+=============================================================================+");
-            terminal.WriteLine("|                    USURPER HISTORY - A Journey Through Time                 |");
+            terminal.WriteLine("|                    PROJECT LINEAGE - A Fork Through Time                    |");
             terminal.WriteLine("+=============================================================================+");
         }
         terminal.WriteLine("");
@@ -91,13 +91,13 @@ public class UsurperHistorySystem
 
         if (GameConfig.ScreenReaderMode)
         {
-            terminal.WriteLine("USURPER HISTORY - A Journey Through Time", "bright_cyan");
+            terminal.WriteLine("PROJECT LINEAGE - A Fork Through Time", "bright_cyan");
         }
         else
         {
             terminal.SetColor("bright_cyan");
             terminal.WriteLine("+=============================================================================+");
-            terminal.WriteLine("|                    USURPER HISTORY - A Journey Through Time                 |");
+            terminal.WriteLine("|                    PROJECT LINEAGE - A Fork Through Time                    |");
             terminal.WriteLine("+=============================================================================+");
         }
         terminal.WriteLine("");
@@ -153,13 +153,13 @@ public class UsurperHistorySystem
 
         if (GameConfig.ScreenReaderMode)
         {
-            terminal.WriteLine("USURPER HISTORY - A Journey Through Time", "bright_cyan");
+            terminal.WriteLine("PROJECT LINEAGE - A Fork Through Time", "bright_cyan");
         }
         else
         {
             terminal.SetColor("bright_cyan");
             terminal.WriteLine("+=============================================================================+");
-            terminal.WriteLine("|                    USURPER HISTORY - A Journey Through Time                 |");
+            terminal.WriteLine("|                    PROJECT LINEAGE - A Fork Through Time                    |");
             terminal.WriteLine("+=============================================================================+");
         }
         terminal.WriteLine("");
@@ -376,8 +376,8 @@ public class UsurperHistorySystem
         terminal.WriteLine("");
 
         terminal.SetColor("bright_white");
-        terminal.WriteLine("                         ~ Usurper Reborn ~");
-        terminal.WriteLine("                           (2024 - Present)");
+        terminal.WriteLine("                    ~ SIGSEGV: The Heap Lands ~");
+        terminal.WriteLine("                           (2026 - Present)");
         terminal.WriteLine("");
 
         if (GameConfig.ScreenReaderMode)
@@ -389,44 +389,44 @@ public class UsurperHistorySystem
             terminal.SetColor("bright_green");
             terminal.WriteLine("  +-----------------------------------------------------------------------+");
             terminal.WriteLine("  |                        JASON KNIGHT                                   |");
-            terminal.WriteLine("  |                   Creator of Usurper Reborn                           |");
+            terminal.WriteLine("  |                 Creator of Usurper Reborn                            |");
             terminal.WriteLine("  +-----------------------------------------------------------------------+");
         }
         terminal.WriteLine("");
 
         terminal.SetColor("white");
-        terminal.WriteLine("  This remake began with a simple question: what if Usurper had continued");
-        terminal.WriteLine("  to evolve? What if the limitations of 1990s hardware were lifted, but");
-        terminal.WriteLine("  the soul of the game remained intact?");
+        terminal.WriteLine("  This fork began with a different question: what if the terminal-first");
+        terminal.WriteLine("  strengths of the codebase were redirected into a new fantasy entirely?");
+        terminal.WriteLine("  Not a throne. Not a dungeon. A hostile runtime and a rogue server.");
+        terminal.WriteLine("  The SIGSEGV fork is currently being driven by geeknik.");
         terminal.WriteLine("");
 
         terminal.SetColor("gray");
-        terminal.WriteLine("  Usurper Reborn is built in C# with modern architecture, but it stays");
-        terminal.WriteLine("  true to the original vision. The core gameplay loops, the class system,");
-        terminal.WriteLine("  the dungeon structure, and the political intrigue are all preserved.");
+        terminal.WriteLine("  SIGSEGV is built in C# on the same practical foundations, but its");
+        terminal.WriteLine("  identity now points toward operator crews, contract work, procedural");
+        terminal.WriteLine("  megacorps, heat, and exploit-driven progression across the Heap.");
         terminal.WriteLine("");
 
         terminal.SetColor("cyan");
-        terminal.WriteLine("  New features added to the remake:");
+        terminal.WriteLine("  New direction for the fork:");
         terminal.WriteLine("");
         terminal.SetColor("white");
-        terminal.WriteLine("    - 50 unique NPCs with distinct personalities and AI behaviors");
-        terminal.WriteLine("    - Dynamic world simulation where NPCs live their own lives");
-        terminal.WriteLine("    - Enhanced narrative with story progression and mysteries to uncover");
-        terminal.WriteLine("    - Improved team/gang warfare systems");
-        terminal.WriteLine("    - New Game+ cycles with persistent progress");
-        terminal.WriteLine("    - Modern save system with multiple slots");
-        terminal.WriteLine("    - Expanded dungeon with new monsters and challenges");
+        terminal.WriteLine("    - Rebrand the terminal UX around SIGSEGV and the Heap");
+        terminal.WriteLine("    - Shift world fiction toward rogue infrastructure and hostile lattices");
+        terminal.WriteLine("    - Rework jobs, crews, contracts, and operator progression");
+        terminal.WriteLine("    - Preserve the proven multiplayer and persistence foundations");
+        terminal.WriteLine("    - Harden trust boundaries before adding scripting and puzzle runtimes");
+        terminal.WriteLine("    - Replace fantasy-era presentation with cyberpunk systems language");
         terminal.WriteLine("");
 
         terminal.SetColor("bright_yellow");
-        terminal.WriteLine("  The text-based interface is intentional. It's a love letter to an era");
-        terminal.WriteLine("  when imagination filled in what graphics couldn't show. When the words");
-        terminal.WriteLine("  on your screen became worlds in your mind.");
+        terminal.WriteLine("  The text-first interface remains intentional. The keyboard is still the");
+        terminal.WriteLine("  right medium for dense systems, sharp decisions, and a world where");
+        terminal.WriteLine("  every packet, prompt, and exploit matters.");
         terminal.WriteLine("");
 
         terminal.SetColor("bright_green");
-        terminal.WriteLine("  Welcome to Usurper. Welcome to history. Welcome home.");
+        terminal.WriteLine("  Welcome to SIGSEGV. Stay allocated.");
         terminal.WriteLine("");
 
         terminal.SetColor("yellow");
